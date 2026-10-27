@@ -46,7 +46,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
 DEFAULT_PORTS = [21, 22, 23, 53, 80, 139, 443, 445, 554, 1883, 3389,
@@ -161,6 +161,45 @@ def network_info(_a):
     /sys/class/net/*/address for MACs. Never returns a password.
     """
     interfaces = {}
+    # Primary method that needs no external binary: socket.if_nameindex
+    # plus ioctl. On the phone the ip binary may be missing and
+    # /sys/class/net may be empty in the app sandbox, which made
+    # v1.3.0 return interfaces=[] even though the phone was online.
+    try:
+        import fcntl
+        import struct
+        for _idx, name in socket.if_nameindex():
+            ent = interfaces.setdefault(name, {"name": name, "ipv4": [], "mac": ""})
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                packed = struct.pack("256s", name.encode()[:15])
+                res = fcntl.ioctl(s.fileno(), 0x8915, packed)  # SIOCGIFADDR
+                ip = socket.inet_ntoa(res[20:24])
+                res2 = fcntl.ioctl(s.fileno(), 0x891b, packed)  # SIOCGIFNETMASK
+                mask = socket.inet_ntoa(res2[20:24])
+                prefix = sum(bin(int(x)).count("1") for x in mask.split("."))
+                ent["ipv4"].append({"address": ip, "prefix": prefix})
+                s.close()
+            except Exception:
+                pass
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                packed = struct.pack("256s", name.encode()[:15])
+                res = fcntl.ioctl(s.fileno(), 0x8927, packed)  # SIOCGIFHWADDR
+                ent["mac"] = ":".join(f"{b:02x}" for b in res[18:24])
+                s.close()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        with open("/proc/net/dev") as f:
+            for line in f.read().splitlines()[2:]:
+                if ":" in line:
+                    nm = line.split(":")[0].strip()
+                    interfaces.setdefault(nm, {"name": nm, "ipv4": [], "mac": ""})
+    except Exception:
+        pass
     try:
         r = subprocess.run(["ip", "-4", "addr", "show"], capture_output=True,
                            text=True, timeout=5)
@@ -245,8 +284,15 @@ def network_info(_a):
             break
     out_interfaces = []
     for name, ent in sorted(interfaces.items()):
+        seen = set()
+        uniq = []
+        for a in ent["ipv4"]:
+            k = (a["address"], a["prefix"])
+            if k not in seen:
+                seen.add(k)
+                uniq.append(a)
         out_interfaces.append({
-            "name": name, "mac": ent["mac"], "ipv4": ent["ipv4"],
+            "name": name, "mac": ent["mac"], "ipv4": uniq,
             "vpn_like": name.lower().startswith(vpn_prefixes) or name == "lo",
         })
     return {"interfaces": out_interfaces, "gateways": gateways,
