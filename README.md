@@ -159,14 +159,14 @@ Do not rely on the default subnet: if the phone is on a VPN or Warp virtual path
 - Password handling. A login password is passed only at call time, converted to MD5 inside the server if the endpoint needs it, never written to a file or a log, and passwords in page snippets are masked.
 - Secrets. Tokens, passwords, Cookie values, authtokens, and tunnel domains must never be written into a public repository or shared with other people. Each user scans their own LAN, not someone else's.
 
-## Two Modes: MCP Mode and Shell Mode
+## Two Modes: Safe Audit Mode and Full-Access Mode
 
 Note: SentinelMind has two modes. Do not confuse them.
 
-- **MCP Mode (for other AI assistants):** the 18 tools above, over the MCP protocol. This is the mode for AI assistants that only speak MCP, such as Claude Desktop. It packages field-tested experience (fingerprinting, router login read-only, password masking, private-LAN default) into ready tools, with safety boundaries.
-- **Shell Mode (for direct personal use):** direct Termux control. The `shell` tool runs one shell command on the phone itself, and a direct Termux connection runs any Termux command. For the phone owner, Shell Mode is faster and freer than MCP Mode, and MCP tools are redundant once direct control works. Shell Mode is full access: it can change and delete things, so use it only on your own phone, and stop the tunnel when done.
+- **Safe Audit Mode:** the 18 tools above, over the MCP protocol. This is the default, recommended mode. It packages field-tested experience (fingerprinting, router login read-only, password masking, private-LAN default) into ready tools, with safety boundaries. It audits without changing device settings.
+- **Full-Access Mode:** direct Termux control. The `shell` tool runs one shell command on the phone itself, and a direct Termux connection runs any Termux command. Full-Access Mode is faster and freer, but it is full access: it can change and delete things. Use it only on a phone you own, only when you need full control, and stop the tunnel when done.
 
-In short: Shell Mode for yourself, MCP Mode for other people's AI.
+In short: Safe Audit Mode for routine audits, Full-Access Mode only when full control is needed.
 
 ## Usage Examples
 
