@@ -1,4 +1,6 @@
-# LAN MCP: Scan Your LAN with AI
+# AI Phone Audit Tool: Audit Your Network with Your Phone
+
+> This is an AI phone audit tool, not just an MCP server. MCP is only the underlying protocol that connects the AI to the phone. What the user gets is a phone that audits the network.
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-18_tools-green.svg)](https://modelcontextprotocol.io/)
@@ -9,11 +11,13 @@
 
 ## What Is This
 
-LAN MCP is a Model Context Protocol (MCP) server that runs on an Android phone. It is no longer just a small LAN scanner: it is a network audit tool. It lets an AI assistant scan and identify devices on a home local area network (LAN), audit hosts for exposed services and leaked credentials, read router information after login, check nearby Wi-Fi networks and encryption, and run local phone checks, without exposing LAN devices directly to the outside internet.
+This is an AI phone audit tool. The phone itself is the audit device: it runs on an Android phone, and an AI assistant audits the network through the phone. It is no longer positioned as an MCP server, and no longer just a small LAN scanner.
 
-In short: the phone is already on the home Wi-Fi. The phone runs the server. A remote AI assistant connects to the phone, and the phone does the network audit work on its behalf.
+It lets an AI assistant scan and identify devices on a home local area network (LAN), audit hosts for exposed services and leaked credentials, read router information after login, check nearby Wi-Fi networks and encryption, and run local phone checks, without exposing LAN devices directly to the outside internet.
 
-This is useful when the AI assistant is running somewhere else (for example in the cloud) and cannot reach `192.168.x.x` addresses directly. The phone acts as a bridge between the remote AI and the home network.
+In short: the phone is already on the home Wi-Fi. The phone runs the audit service. A remote AI assistant connects to the phone, and the phone does the network audit work on its behalf.
+
+This is useful when the AI assistant is running somewhere else (for example in the cloud) and cannot reach `192.168.x.x` addresses directly. The phone acts as a bridge between the remote AI and the home network. Under the hood the connection uses the Model Context Protocol (MCP), but that is an implementation detail, not the product.
 
 ## Who Is This For
 
