@@ -1,5 +1,10 @@
 # LAN MCP: Scan Your LAN with AI
 
+[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-16_tools-green.svg)](https://modelcontextprotocol.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Termux%20%2F%20Android-orange.svg)](https://termux.dev/)
+
 [繁體中文版](README-zh-TW.md)
 
 ## Overview

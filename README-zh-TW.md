@@ -1,5 +1,10 @@
 # LAN MCP：用 AI 幫你掃內網
 
+[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-16_tools-green.svg)](https://modelcontextprotocol.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Termux%20%2F%20Android-orange.svg)](https://termux.dev/)
+
 [English version](README.md)
 
 ## 概覽
