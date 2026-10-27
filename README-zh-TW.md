@@ -63,6 +63,24 @@ python3 --version
 ```
 需要 Python 3。其他 Python 套件都不需要：伺服器只用 Python 標準庫。
 
+## 第 2b 步：裝 Termux:API（WiFi 和手機檢查必須要）
+
+Termux:API 是一個別的配套 App，不是只裝一個包就夠了。沒有它，WiFi 和手機命令會超時、或者回被遮罩的值。
+
+1. 在 Termux 裡裝 API 包：
+   ```
+   pkg install -y termux-api
+   ```
+2. 再裝 Termux:API 這個 Android App，簽名要跟你的 Termux 對得上：F-Droid 版 Termux 就裝 F-Droid 版 Termux:API，地址是 https://f-droid.org/en/packages/com.termux.api/ 。不要跟 Termux:X11 搞混：Termux:X11 是圖形顯示器那款 App，不是 API App。
+3. 打開 Termux:API App 一次，然後到手機設定裡給 Termux 開定位權限（設定、應用、Termux、權限、定位、允許）。沒開定位，WiFi SSID 會報 `<unknown ssid>`，MAC 會報 `02:00:00:00:00:00`。
+4. 在 Termux 裡驗證：
+   ```
+   termux-wifi-connectioninfo
+   termux-wifi-scaninfo
+   termux-telephony-cellinfo
+   ```
+   前兩個應該回已連網路和附近 WiFi，第三個回移動基站和信號。如果命令超時、沒有輸出，就是配套 App 沒裝、或者權限沒開，不是包的問題。
+
 ## 第 3 步：取得這些檔案
 
 在 Termux 裡下載這個倉庫，兩種方法都可以：

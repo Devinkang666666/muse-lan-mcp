@@ -67,6 +67,24 @@ python3 --version
 ```
 Python 3 is required. No other Python packages are required: the server uses only the Python standard library.
 
+## Step 2b: Install Termux:API (Required for Wi-Fi and Phone Checks)
+
+Termux:API is a separate companion app, not a package alone. Without it, Wi-Fi and phone commands time out or return masked values.
+
+1. In Termux, install the API package:
+   ```
+   pkg install -y termux-api
+   ```
+2. Install the Termux:API Android app, with a build whose signing matches your Termux install: F-Droid Termux goes with the F-Droid Termux:API app, from https://f-droid.org/en/packages/com.termux.api/ . Do not confuse it with Termux:X11: Termux:X11 is a graphical display app, not the API app.
+3. Open the Termux:API app once, then grant location permission to Termux (Android Settings, Apps, Termux, Permissions, Location, Allow). Without location permission, Wi-Fi SSIDs report as `<unknown ssid>` and MACs as `02:00:00:00:00:00`.
+4. Verify in Termux:
+   ```
+   termux-wifi-connectioninfo
+   termux-wifi-scaninfo
+   termux-telephony-cellinfo
+   ```
+   The first two should return the connected network and nearby access points; the third returns mobile cell and signal data. If a command times out with no output, the companion app is missing or not granted permission, not the package.
+
 ## Step 3: Get These Files
 
 In Termux, download this repository. Either method works:
