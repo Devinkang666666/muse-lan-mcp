@@ -1,6 +1,8 @@
-# AI Phone Audit Tool: Audit Your Network with Your Phone
+# PhoneSentinel: AI Phone Network Patrol
 
-> This is an AI phone audit tool, not just an MCP server. MCP is only the underlying protocol that connects the AI to the phone. What the user gets is a phone that audits the network.
+> PhoneSentinel is an AI phone network patrol tool, not just an MCP server. MCP is only the underlying protocol that connects the AI to the phone. What the user gets is a phone that patrols the network, with audit-grade inspection.
+>
+> Zero Hardware, Phone as the Patrol Device: no extra hardware to buy, no appliance to deploy. The phone you already carry is the patrol device.
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-18_tools-green.svg)](https://modelcontextprotocol.io/)
@@ -11,7 +13,7 @@
 
 ## What Is This
 
-This is an AI phone audit tool. The phone itself is the audit device: it runs on an Android phone, and an AI assistant audits the network through the phone. It is no longer positioned as an MCP server, and no longer just a small LAN scanner.
+This is PhoneSentinel, an AI phone network patrol tool. The phone itself is the patrol device: it runs on an Android phone, and an AI assistant patrols the network through the phone, with audit-grade inspection. It is no longer positioned as an MCP server, and no longer just a small LAN scanner.
 
 It lets an AI assistant scan and identify devices on a home local area network (LAN), audit hosts for exposed services and leaked credentials, read router information after login, check nearby Wi-Fi networks and encryption, and run local phone checks, without exposing LAN devices directly to the outside internet.
 
