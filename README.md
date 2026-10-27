@@ -7,13 +7,32 @@
 
 [繁體中文版](README-zh-TW.md)
 
-## Overview
+## What Is This
 
-Run an MCP server locally on your phone, so your AI assistant (for example Muse) can scan and identify devices on your home LAN from the phone, and view router information read-only after login. Your LAN devices are not exposed directly to an external AI; the AI only sends requests through this phone-local server.
+LAN MCP is a Model Context Protocol (MCP) server that runs on an Android phone. It lets an AI assistant scan and identify devices on a home local area network (LAN), and read router information after login, without exposing LAN devices directly to the outside internet.
+
+In short: the phone is already on the home Wi-Fi. The phone runs the server. A remote AI assistant connects to the phone, and the phone does the LAN work on its behalf.
+
+This is useful when the AI assistant is running somewhere else (for example in the cloud) and cannot reach `192.168.x.x` addresses directly. The phone acts as a bridge between the remote AI and the home LAN.
+
+## Who Is This For
+
+Beginners are welcome. No server, no Docker host, no vendor controller, and no extra hardware are required. An Android phone, a home Wi-Fi network, and a free ngrok account are enough.
+
+Basic familiarity with typing commands in a terminal is helpful. Every step below is written out in order, from zero.
+
+## What It Can Do
+
+- Scan a LAN subnet and list live hosts and open ports.
+- Identify hosts by banner, HTTP title, SSDP, and mDNS.
+- Ping hosts and probe TCP ports.
+- Send one HTTP POST to a private-LAN address (for example a router login page).
+- Log in to a router web page and fetch one page read-only, in a single server-side call (`auth_fetch`). The session cookie is used only inside the server, never returned and never stored.
+- 16 tools in total: `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`.
 
 ## Operation Images
 
-The three images below are illustrations, not real screenshots. Do not copy commands from the images; follow the commands in this README. Images are in SVG vector format, so they can be pushed directly to the repository.
+The three images below are illustrations, not real screenshots. Follow the commands in this README, not the commands drawn in the images.
 
 ![Architecture](images/operation-architecture.svg)
 
@@ -21,74 +40,125 @@ The three images below are illustrations, not real screenshots. Do not copy comm
 
 ![Identify Devices](images/operation-scan.svg)
 
-## Files
+## Step 1: Install Termux
 
-- `muse_lan_mcp.py`: the MCP server itself, Python standard library only, listening on `0.0.0.0:8765`, path `/mcp`, JSON-RPC 2.0.
-  - Tools (16 in total): `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`.
-  - `auth_fetch`: in a single call, POST to log in, take the Cookie, then do one read-only GET. The Cookie is used only inside the server, never returned and never stored.
-- `start-lan.sh`: one-click start. It starts MCP + an ngrok tunnel (forwarding to 8765), in the background, with logs kept. Stop with `~/start-lan.sh stop`.
+Termux is a terminal app for Android. It provides a Linux environment on the phone, without root.
 
-## Safety Rules (Do Not Remove)
+1. Install Termux from F-Droid (recommended; the Play Store version is outdated). Open Termux once so it finishes its first-time setup.
+2. Update the package lists:
+   ```
+   pkg update && pkg upgrade -y
+   ```
 
-- Private LAN only: public IPs are always rejected; hostnames are allowed only when they resolve to a private or loopback address.
-- Authentication: when the environment variable `MUSE_TOKEN` is set, requests must carry `Authorization: Bearer <MUSE_TOKEN>`, otherwise they return 401. When exposed via ngrok, always set a token; never run it open.
-- Read-only first: after login, `auth_fetch` only does GET and changes no device settings. Do not use `Set*` endpoints.
-- Password handling: a login password is passed only at call time, converted to MD5 inside the server if the endpoint needs it, never written to a file or a log, and passwords in page snippets are masked.
-- Tokens, passwords, Cookie values and tunnel domains must never be written into a public repository. `start-lan.sh` only reads the existing `~/.hark_token` on your phone and contains no real secret.
+## Step 2: Install Python
 
-## Prerequisites
+In Termux, run:
+```
+pkg install -y python
+python3 --version
+```
+Python 3 is required. No other Python packages are required: the server uses only the Python standard library.
 
-- Termux on your phone, Python 3, and `~/muse_lan_mcp.py` already in place.
-- A token file `~/.hark_token`, containing a Bearer token you chose yourself. Other users must create their own; do not share yours.
-- ngrok (see the tunnel section below; without a configured authtoken, no tunnel will start).
+## Step 3: Get These Files
 
-## Set Up the Tunnel (First Time Only)
+In Termux, download this repository. Either method works:
 
-`start-lan.sh` only starts a tunnel; it does not install ngrok or configure an authtoken for you. Do the steps below once, the first time only:
-1. Install ngrok: on the ngrok download page, choose the Android ARM64 build, download and extract it, put `ngrok` somewhere Termux can find (for example `~/../usr/bin/ngrok`), then `chmod +x ngrok`. There is no ngrok package in the Termux repository; do not look for it with `pkg install ngrok`.
-2. Register a free ngrok account, sign in, and on the Dashboard, Your Authtoken page, copy your own authtoken. It is yours alone; do not share it and do not write it into a public repository.
-3. Configure the authtoken in Termux on your phone (replace the placeholder with your own token; do not paste it anywhere public):
+Option A, with git:
+```
+pkg install -y git
+git clone https://github.com/Devinkang666666/muse-lan-mcp.git
+cp muse-lan-mcp/muse_lan_mcp.py ~/
+cp muse-lan-mcp/start-lan.sh ~/
+```
+
+Option B, without git: download the repository ZIP from the GitHub page, extract it in Termux or in a file manager, then copy `muse_lan_mcp.py` and `start-lan.sh` to the Termux home directory (`~`).
+
+After this step, `~/muse_lan_mcp.py` and `~/start-lan.sh` must exist.
+
+## Step 4: Create a Token
+
+The server requires a Bearer token when it is exposed through a tunnel. The token is a password chosen by the owner of the phone. It is never shared, never committed to a repository, and never sent to anyone else.
+
+In Termux, create a token file (replace the example value with a long random value of your own):
+```
+printf 'your-long-random-token-here' > ~/.lan_mcp_token
+chmod 600 ~/.lan_mcp_token
+```
+`start-lan.sh` reads this file at start time. For backward compatibility it also accepts the older file name `~/.hark_token` if `~/.lan_mcp_token` does not exist.
+
+## Step 5: Install ngrok
+
+ngrok creates a public tunnel address that forwards to the local MCP server on port 8765. A free ngrok account is enough for one tunnel at a time.
+
+1. Download ngrok for Android ARM64 from the official ngrok download page. There is no ngrok package in the Termux repository, so do not use `pkg install ngrok`.
+2. Extract it and place the `ngrok` binary where Termux can find it, for example `~/../usr/bin/ngrok`, then run:
+   ```
+   chmod +x ngrok
+   ```
+3. Register a free ngrok account, sign in, and copy the authtoken from Dashboard, Your Authtoken. The authtoken is private to its owner. Do not share it and do not write it into a public repository.
+4. Configure it in Termux (replace the placeholder with the real authtoken):
    ```
    ngrok config add-authtoken <your own authtoken>
    ```
-   After that, the token lives only on your phone, in `~/.config/ngrok/ngrok.yml`.
-4. Test the tunnel once (without waiting for the one-click script):
-   ```
-   proot -b ~/resolv.conf:/etc/resolv.conf ngrok http 8765 --log=stdout --inspect=false
-   ```
-   If you see `started tunnel` and an address like `https://....ngrok-free.dev`, the tunnel works, and that address is the address your AI assistant should connect to. Stop it with Ctrl+C and let the one-click script start it later.
-5. If ngrok reports `lookup connect.ngrok-agent.com on [::1]:53: connection refused` (cannot resolve the ngrok server), your phone DNS is broken: write a `~/resolv.conf` with two lines, your home router address (for example `nameserver 192.168.1.1`) and a public DNS (for example `nameserver 223.5.5.5`), then always start ngrok the way step 4 does, with `proot -b ~/resolv.conf:/etc/resolv.conf ngrok ...`. `start-lan.sh` already starts it this way.
-6. A free ngrok account can hold only one domain at a time. Starting a second tunnel reports `ERR_NGROK_334` (domain already in use). Run `pkill ngrok` to stop the old one first, then start the new one. `start-lan.sh` already does this.
-7. Stop the tunnel when you are done. Leaving it open publishes your phone MCP server on the public internet; even with a Bearer token, do not leave it open long-term.
+   After this, the authtoken lives only on the phone, in `~/.config/ngrok/ngrok.yml`.
 
-## One-Click Start
+## Step 6: Start With One Command
 
+In Termux, run:
 ```
-cp start-lan.sh ~/start-lan.sh
 chmod +x ~/start-lan.sh
 ~/start-lan.sh
 ```
+The script:
+- stops any old ngrok tunnel first (a free account can hold only one domain at a time; a second tunnel reports `ERR_NGROK_334`),
+- starts the MCP server in the background, or reuses it if it is already running,
+- starts an ngrok tunnel to port 8765 in the background,
+- prints a `started tunnel` line with a public address like `https://....ngrok-free.dev`.
 
-After it runs, you will see the MCP listening line and the ngrok `started tunnel` line. The tunnel address is the address your AI assistant should connect to. Give that address to your MCP client (for example Muse's Lan Mcp connector); the client must carry your Bearer token to call it.
+That public address, plus the Bearer token from Step 4, is what an AI assistant needs to connect. The tunnel address is the MCP endpoint, with path `/mcp`, for example `https://....ngrok-free.dev/mcp`.
 
-When scanning the LAN, always specify the subnet explicitly, for example:
-```json
-{"subnet": "192.168.1.0/24"}
-```
-Do not rely on the default subnet: if the phone is on a VPN / Warp virtual path, the default subnet may become a virtual subnet and produce a false all-open result.
-
-## How Others Use It
-
-1. Download these files (this README, `muse_lan_mcp.py`, `start-lan.sh`).
-2. Put `muse_lan_mcp.py` in Termux on your own phone, and create your own `~/.hark_token`.
-3. Run `~/start-lan.sh` and get your tunnel address.
-4. Connect that MCP address in your own AI assistant, with your own Bearer token, and you can scan your own LAN and identify your own devices.
-5. Other people scan their own LAN, not yours. Do not send them your tunnel address, token or password.
-
-## Stop
-
+To stop everything later, run:
 ```
 ~/start-lan.sh stop
 ```
+Do not leave the tunnel or the MCP server running long-term when it is not needed.
 
-Stop when you are done; do not leave the tunnel or MCP running long-term.
+## Step 7: Connect an AI Assistant
+
+In any MCP-compatible AI assistant, add a remote MCP server with:
+- URL: the ngrok tunnel address from Step 6, with `/mcp` at the end,
+- Authorization header: `Authorization: Bearer <the token from Step 4>`.
+
+Then ask the assistant to scan the LAN. Always specify the home subnet explicitly, for example:
+```json
+{"subnet": "192.168.1.0/24"}
+```
+Do not rely on the default subnet: if the phone is on a VPN or Warp virtual path, the default subnet may become a virtual subnet and produce a false all-open result.
+
+## Files
+
+- `muse_lan_mcp.py`: the MCP server. Python standard library only. Listens on `0.0.0.0:8765`, path `/mcp`, JSON-RPC 2.0.
+- `start-lan.sh`: one-click start and stop for the MCP server plus the ngrok tunnel. It contains no token, password, or tunnel domain. Tokens are read from a file at run time only.
+- `images/`: SVG illustrations for the README.
+- `LICENSE`: MIT License.
+- `SECURITY.md`: security policy.
+
+## Safety Rules
+
+- Private LAN only. Public IP addresses are always rejected. Hostnames are allowed only when they resolve to a private or loopback address.
+- Authentication. When `MUSE_TOKEN` is set, requests must carry `Authorization: Bearer <MUSE_TOKEN>`, otherwise they return 401. When exposed through ngrok, always set a token. Never run the server open.
+- Read-only after login. `auth_fetch` only does GET after login and changes no device settings. Do not use `Set*` endpoints.
+- Password handling. A login password is passed only at call time, converted to MD5 inside the server if the endpoint needs it, never written to a file or a log, and passwords in page snippets are masked.
+- Secrets. Tokens, passwords, Cookie values, authtokens, and tunnel domains must never be written into a public repository or shared with other people. Each user scans their own LAN, not someone else's.
+
+## Troubleshooting
+
+- `ERR_NGROK_334` (domain already in use): stop the old tunnel first with `pkill ngrok`, then run `~/start-lan.sh` again. The script already does this on start.
+- `lookup connect.ngrok-agent.com on [::1]:53: connection refused` (ngrok cannot resolve its own server): the phone DNS is broken. Create `~/resolv.conf` with two lines, the home router address (for example `nameserver 192.168.1.1`) and a public DNS (for example `nameserver 223.5.5.5`), then start ngrok with `proot -b ~/resolv.conf:/etc/resolv.conf ngrok ...`. `start-lan.sh` already starts ngrok this way.
+- `started tunnel` never appears: check `~/ngrok-lan.log` for the ngrok error, and check that the authtoken from Step 5 was configured.
+- MCP does not start: check `~/muse-lan.log`, check that `~/muse_lan_mcp.py` exists, and check that the token file from Step 4 exists.
+- A scan returns every host with every port open: the subnet is probably a VPN or Warp virtual subnet, not the home LAN. Specify the home subnet explicitly, as in Step 7.
+
+## License
+
+MIT License. See `LICENSE`.

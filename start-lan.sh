@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# 一鍵啟動：手機本地 MCP + ngrok 隧道（轉 8765）
-# 用法：~/start-lan.sh        啟動
-#       ~/start-lan.sh stop   停掉 MCP + ngrok
-# 不含任何令牌、密碼，令牌一律即時讀 ~/.hark_token，不寫進本檔、不寫進日誌。
+# One-click start: phone-local MCP + ngrok tunnel (to 8765)
+# Usage: ~/start-lan.sh        start
+#        ~/start-lan.sh stop   stop MCP + ngrok
+# Contains no token or password. The token is read at run time only,
+# from ~/.lan_mcp_token if it exists, otherwise from ~/.hark_token
+# (older name, kept for backward compatibility). It is never written
+# into this file or into a log.
 set -u
 cd "$HOME" || exit 1
 
@@ -36,8 +39,12 @@ if [ ! -f "$MCP_FILE" ]; then
   echo "找不到 $MCP_FILE，先把 muse_lan_mcp.py 放到家目錄再跑本腳本。"
   exit 1
 fi
-if [ ! -f "$HOME/.hark_token" ]; then
-  echo "找不到 ~/.hark_token，令牌檔缺了就起不了 MCP。"
+if [ -f "$HOME/.lan_mcp_token" ]; then
+  TOKEN_FILE="$HOME/.lan_mcp_token"
+elif [ -f "$HOME/.hark_token" ]; then
+  TOKEN_FILE="$HOME/.hark_token"
+else
+  echo "No token file found. Create ~/.lan_mcp_token first (see README Step 4)."
   exit 1
 fi
 
@@ -56,7 +63,7 @@ if pgrep -f "muse_lan_mcp.py" >/dev/null 2>&1; then
   echo "MCP 已在跑，沿用，不重起。"
 else
   echo "正在起 MCP..."
-  nohup env MUSE_TOKEN="$(cat "$HOME/.hark_token")" python3 "$MCP_FILE" > "$MCP_LOG" 2>&1 &
+  nohup env MUSE_TOKEN="$(cat "$TOKEN_FILE")" python3 "$MCP_FILE" > "$MCP_LOG" 2>&1 &
   echo $! > "$MCP_PID"
   sleep 3
   if grep -q "listening on 0.0.0.0:8765" "$MCP_LOG" 2>/dev/null; then
