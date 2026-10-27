@@ -5,16 +5,19 @@
 Only the latest version in the `main` branch is supported. Older
 snapshots are not maintained.
 
-## Private LAN Only
+## Private LAN Only by Default (SentinelMind)
 
-This server is designed for a private home LAN only:
+SentinelMind is designed for a private home LAN by default:
 
 - It must never be exposed to the public internet without a strong
   Bearer token (`MUSE_TOKEN`).
 - A tunnel (for example ngrok) must be stopped when you are done.
   Do not leave it running long-term.
-- Public IP addresses are rejected by design. Hostnames are allowed
-  only when they resolve to a private or loopback address.
+- Public IP addresses are rejected by default. Hostnames are allowed
+  only when they resolve to a private or loopback address, unless the
+  owner explicitly enables the public switch (`MUSE_ALLOW_PUBLIC=1`
+  at start, or an empty `~/.lan_mcp_allow_public` file on the phone).
+  Turn the switch off again when idle.
 
 ## After Login, Read-Only
 
