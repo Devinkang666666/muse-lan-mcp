@@ -88,9 +88,9 @@ Termux:API 是一個別的配套 App，不是只裝一個包就夠了。沒有�
 方法 A，用 git：
 ```
 pkg install -y git
-git clone https://github.com/Devinkang666666/muse-lan-mcp.git
-cp muse-lan-mcp/muse_lan_mcp.py ~/
-cp muse-lan-mcp/start-lan.sh ~/
+git clone https://github.com/Devinkang666666/sentinel-mind-muse.git
+cp sentinel-mind-muse/muse_lan_mcp.py ~/
+cp sentinel-mind-muse/start-lan.sh ~/
 ```
 
 方法 B，不用 git：從 GitHub 頁面下載倉庫 ZIP，解壓後把 `muse_lan_mcp.py` 和 `start-lan.sh` 複製到 Termux 家目錄（`~`）。

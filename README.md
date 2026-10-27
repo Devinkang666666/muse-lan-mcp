@@ -92,9 +92,9 @@ In Termux, download this repository. Either method works:
 Option A, with git:
 ```
 pkg install -y git
-git clone https://github.com/Devinkang666666/muse-lan-mcp.git
-cp muse-lan-mcp/muse_lan_mcp.py ~/
-cp muse-lan-mcp/start-lan.sh ~/
+git clone https://github.com/Devinkang666666/sentinel-mind-muse.git
+cp sentinel-mind-muse/muse_lan_mcp.py ~/
+cp sentinel-mind-muse/start-lan.sh ~/
 ```
 
 Option B, without git: download the repository ZIP from the GitHub page, extract it in Termux or in a file manager, then copy `muse_lan_mcp.py` and `start-lan.sh` to the Termux home directory (`~`).
