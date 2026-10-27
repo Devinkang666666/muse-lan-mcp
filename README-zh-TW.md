@@ -167,7 +167,7 @@ chmod +x ~/start-lan.sh
 ### 哪種 AI 能用哪種模式
 
 - **安全審計模式（普通模式）：任何支援遠端 MCP 的 AI 助手都能用。** AI 那邊不需要自己帶電腦，只要能加一個遠端 MCP 伺服器，填隧道地址加 `/mcp`，再填 Bearer 令牌，就能用。例如 Claude Desktop、Cursor、VS Code Copilot，以及其他支援遠端 HTTP MCP 的助手。如果一個 AI App 只有對話框、沒有地方加 MCP 伺服器，那就用不了這個模式。
-- **全權模式：只有帶程式執行和 shell 控制能力的 AI 才能用。** 例如 Muse、Claude Code、Cursor 的 agent 模式、Codex 這類寫程式的 agent，以及其他能在自己環境裡跑命令的 agent。純對話的 AI 就算連得進來，也沒辦法自己驅動 Termux 命令，全權模式對它就沒用。
+- **全權模式：只有 agent 才能用。** agent 的意思就是不只是對話，還能動手：能跑命令、能調工具、能在自己的環境裡執行東西。例如 Muse、Claude Code、Cursor 的 agent 模式、Codex 這類寫程式的 agent。純對話的 AI 就算連得進來，也沒辦法自己驅動 Termux 命令，全權模式對它就沒用。
 - **用不了的情況：** 只支援本地 stdio MCP、不支援遠端 HTTP 的 AI，不能直接用隧道地址連進來；完全不支援 MCP 的 AI，兩種模式都用不了。
 
 ## 使用範例
