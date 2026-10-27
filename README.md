@@ -4,14 +4,14 @@
 
 ## 操作圖片 / Operation Images
 
-繁體中文：下面三張是示意圖，不是真實截圖，圖裡的命令不用照抄，真正要跑的命令以本文為準。
-English: The three images below are illustrations, not real screenshots. Do not copy commands from the images; follow the commands in this README.
+繁體中文：下面三張是示意圖，不是真實截圖，圖裡的命令不用照抄，真正要跑的命令以本文為準。圖片用 SVG 向量格式，方便直接推到倉庫。
+English: The three images below are illustrations, not real screenshots. Do not copy commands from the images; follow the commands in this README. Images are in SVG vector format, so they can be pushed directly to the repository.
 
-![架構 / Architecture](images/operation-architecture.webp)
+![架構 / Architecture](images/operation-architecture.svg)
 
-![一鍵啟動 / One-Click Start](images/operation-start.webp)
+![一鍵啟動 / One-Click Start](images/operation-start.svg)
 
-![認設備 / Identify Devices](images/operation-scan.webp)
+![認設備 / Identify Devices](images/operation-scan.svg)
 
 ---
 

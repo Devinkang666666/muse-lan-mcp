@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+<rect width="800" height="600" fill="white"/>
+<text x="400" y="60" text-anchor="middle" font-family="sans-serif" font-size="36" fill="#333">Home LAN Scanning System</text>
+<rect x="80" y="120" width="150" height="300" rx="20" fill="#2f5d7a"/>
+<rect x="95" y="140" width="120" height="240" rx="8" fill="#3a6f92"/>
+<rect x="105" y="320" width="100" height="36" rx="6" fill="#eaf2f7"/>
+<text x="155" y="343" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#2f5d7a">MCP Server</text>
+<text x="155" y="460" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#333">Phone</text>
+<path d="M 250 220 Q 400 150 520 220" stroke="#7a9ab0" stroke-width="3" stroke-dasharray="10,8" fill="none" marker-end="url(#arrow)"/>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#7a9ab0"/></marker></defs>
+<rect x="380" y="170" width="70" height="60" rx="10" fill="#8aa8bb"/>
+<text x="415" y="260" text-anchor="middle" font-family="sans-serif" font-size="20" fill="#333">Tunnel</text>
+<ellipse cx="620" cy="250" rx="110" ry="80" fill="#bcd6e8"/>
+<text x="620" y="390" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#333">AI Assistant</text>
+<path d="M 250 300 Q 320 380 380 400" stroke="#7a9ab0" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+<rect x="330" y="400" width="200" height="60" rx="10" fill="#7a93a3"/>
+<line x1="370" y1="400" x2="360" y2="360" stroke="#7a93a3" stroke-width="8"/>
+<line x1="490" y1="400" x2="500" y2="360" stroke="#7a93a3" stroke-width="8"/>
+<text x="430" y="500" text-anchor="middle" font-family="sans-serif" font-size="28" fill="#333">Router</text>
+<circle cx="360" cy="540" r="22" fill="#8aa8bb"/>
+<circle cx="430" cy="540" r="22" fill="#8aa8bb"/>
+<circle cx="500" cy="540" r="22" fill="#8aa8bb"/>
+<text x="430" y="590" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#333">Devices</text>
+</svg>
