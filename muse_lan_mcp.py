@@ -46,7 +46,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.3.1"
+VERSION = "1.2.0"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
 DEFAULT_PORTS = [21, 22, 23, 53, 80, 139, 443, 445, 554, 1883, 3389,
@@ -150,166 +150,12 @@ def device_info(_a):
             "python": sys.version.split()[0], "muse_lan_mcp_version": VERSION}
 
 
-def network_info(_a):
-    """List interfaces, gateways and the best LAN candidate.
-
-    VPN-like interfaces (tun*, wg*, ppp*) are excluded from the LAN
-    candidate even if they are the default route, because local_ip()
-    (UDP to 8.8.8.8) picks the VPN interface first on a phone with
-    VPN/Warp on, and that used to make lan_scan default to a virtual
-    subnet. Read-only: ip addr / ip route / /proc/net/route, plus
-    /sys/class/net/*/address for MACs. Never returns a password.
-    """
-    interfaces = {}
-    # Primary method that needs no external binary: socket.if_nameindex
-    # plus ioctl. On the phone the ip binary may be missing and
-    # /sys/class/net may be empty in the app sandbox, which made
-    # v1.3.0 return interfaces=[] even though the phone was online.
-    try:
-        import fcntl
-        import struct
-        for _idx, name in socket.if_nameindex():
-            ent = interfaces.setdefault(name, {"name": name, "ipv4": [], "mac": ""})
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                packed = struct.pack("256s", name.encode()[:15])
-                res = fcntl.ioctl(s.fileno(), 0x8915, packed)  # SIOCGIFADDR
-                ip = socket.inet_ntoa(res[20:24])
-                res2 = fcntl.ioctl(s.fileno(), 0x891b, packed)  # SIOCGIFNETMASK
-                mask = socket.inet_ntoa(res2[20:24])
-                prefix = sum(bin(int(x)).count("1") for x in mask.split("."))
-                ent["ipv4"].append({"address": ip, "prefix": prefix})
-                s.close()
-            except Exception:
-                pass
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                packed = struct.pack("256s", name.encode()[:15])
-                res = fcntl.ioctl(s.fileno(), 0x8927, packed)  # SIOCGIFHWADDR
-                ent["mac"] = ":".join(f"{b:02x}" for b in res[18:24])
-                s.close()
-            except Exception:
-                pass
-    except Exception:
-        pass
-    try:
-        with open("/proc/net/dev") as f:
-            for line in f.read().splitlines()[2:]:
-                if ":" in line:
-                    nm = line.split(":")[0].strip()
-                    interfaces.setdefault(nm, {"name": nm, "ipv4": [], "mac": ""})
-    except Exception:
-        pass
-    try:
-        r = subprocess.run(["ip", "-4", "addr", "show"], capture_output=True,
-                           text=True, timeout=5)
-        cur = None
-        for line in r.stdout.splitlines():
-            m = re.match(r"^\d+:\s+(\S+):", line)
-            if m:
-                cur = m.group(1).rstrip(":")
-                interfaces.setdefault(cur, {"name": cur, "ipv4": [], "mac": ""})
-                continue
-            if cur:
-                m2 = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)", line)
-                if m2:
-                    interfaces[cur]["ipv4"].append(
-                        {"address": m2.group(1), "prefix": int(m2.group(2))})
-    except Exception:
-        pass
-    try:
-        for name in os.listdir("/sys/class/net"):
-            ent = interfaces.setdefault(name, {"name": name, "ipv4": [], "mac": ""})
-            try:
-                with open(f"/sys/class/net/{name}/address") as f:
-                    ent["mac"] = f.read().strip()
-            except Exception:
-                pass
-    except Exception:
-        pass
-    gateways = []
-    try:
-        r = subprocess.run(["ip", "route", "show"], capture_output=True,
-                           text=True, timeout=5)
-        for line in r.stdout.splitlines():
-            m = re.search(r"^default\s+via\s+(\S+)(?:\s+dev\s+(\S+))?", line)
-            if m:
-                gateways.append({"gateway": m.group(1), "dev": m.group(2) or ""})
-    except Exception:
-        pass
-    if not gateways:
-        try:
-            with open("/proc/net/route") as f:
-                for line in f.read().splitlines()[1:]:
-                    p = line.split()
-                    if len(p) >= 3 and p[1] == "00000000":
-                        gw = p[2]
-                        try:
-                            b = bytes.fromhex(gw)
-                            ip = ".".join(str(x) for x in reversed(b))
-                        except Exception:
-                            ip = gw
-                        gateways.append({"gateway": ip, "dev": p[0]})
-        except Exception:
-            pass
-    vpn_prefixes = ("tun", "wg", "ppp", "tap", "vpn")
-    lan_candidate = None
-    for name, ent in interfaces.items():
-        if name == "lo":
-            continue
-        if name.lower().startswith(vpn_prefixes):
-            continue
-        for addr in ent["ipv4"]:
-            try:
-                ip = ipaddress.ip_address(addr["address"])
-            except Exception:
-                continue
-            if not (ip.is_private and not ip.is_loopback):
-                continue
-            try:
-                net = ipaddress.ip_network(
-                    f"{addr['address']}/{addr['prefix']}", strict=False)
-            except Exception:
-                continue
-            gw = ""
-            for g in gateways:
-                if g["dev"] == name:
-                    gw = g["gateway"]
-                    break
-            lan_candidate = {"interface": name, "ip": addr["address"],
-                             "network": str(net), "gateway": gw,
-                             "mac": ent["mac"]}
-            break
-        if lan_candidate:
-            break
-    out_interfaces = []
-    for name, ent in sorted(interfaces.items()):
-        seen = set()
-        uniq = []
-        for a in ent["ipv4"]:
-            k = (a["address"], a["prefix"])
-            if k not in seen:
-                seen.add(k)
-                uniq.append(a)
-        out_interfaces.append({
-            "name": name, "mac": ent["mac"], "ipv4": uniq,
-            "vpn_like": name.lower().startswith(vpn_prefixes) or name == "lo",
-        })
-    return {"interfaces": out_interfaces, "gateways": gateways,
-            "lan_candidate": lan_candidate,
-            "local_ip_old_method": local_ip(),
-            "note": "lan_candidate excludes VPN-like interfaces; "
-                    "compare its network with the previous scan subnet "
-                    "to detect a subnet change."}
-
-
 def lan_scan(a):
     subnet = a.get("subnet") or ""
     ports = a.get("ports") or DEFAULT_PORTS
     if not subnet:
-        cand = network_info({}).get("lan_candidate") or {}
-        subnet = cand.get("network") or (
-            ".".join(local_ip().split(".")[:3]) + ".0/24")
+        base = ".".join(local_ip().split(".")[:3]) + ".0/24"
+        subnet = base
     try:
         net = ipaddress.ip_network(subnet, strict=False)
     except Exception as e:
@@ -843,8 +689,7 @@ def auth_fetch(a):
         return {"host": host_in, "port": port, "path": path, "error": str(e)}
 
 
-DISPATCH = {"device_info": device_info, "network_info": network_info,
-            "lan_scan": lan_scan, "ping": ping,
+DISPATCH = {"device_info": device_info, "lan_scan": lan_scan, "ping": ping,
             "tcp_ports": tcp_ports, "banner": banner, "web_audit": web_audit,
             "audit_host": audit_host, "mqtt_probe": mqtt_probe,
             "web_cred_context": web_cred_context, "http_probe": http_probe,
@@ -860,8 +705,7 @@ def _spec(name, desc, props, required):
 
 TOOLS = [
     _spec("device_info", "這台設備的系統與內網 IP。", {}, []),
-    _spec("network_info", "唯讀：列出手機接口、閘道，排除 VPN 類接口後給出最可能的內網網段（lan_candidate），用來檢測網段變化；不給網段時 lan_scan 也用它當預設，不再用 VPN 虛擬 IP 推網段。", {}, []),
-    _spec("lan_scan", "掃描內網網段，找出在線設備（有開埠、回 RST 或在 ARP 表）與其開放埠（不給網段時用 network_info 的內網候選網段，不再用 VPN 虛擬 IP 推網段）。",
+    _spec("lan_scan", "掃描內網網段，找出在線設備（有開埠、回 RST 或在 ARP 表）與其開放埠（預設本機所在 /24）。",
           {"subnet": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}}}, []),
     _spec("ping", "Ping 一個內網位址。",
           {"host": {"type": "string"}, "count": {"type": "integer"}}, ["host"]),
