@@ -46,7 +46,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
 DEFAULT_PORTS = [21, 22, 23, 53, 80, 139, 443, 445, 554, 1883, 3389,
@@ -385,7 +385,7 @@ def web_cred_context(a):
 
 
 def http_probe(a):
-    host, ports, paths = a["host"], (a.get("ports") or [80]), (a.get("paths") or ["/"])
+    host, ports, paths = a["host"], (a.get("ports") or ([int(a["port"])] if a.get("port") else [80])), (a.get("paths") or ["/"])
     probes = []
     for p in ports:
         for path in paths:
@@ -551,6 +551,42 @@ def guess_device(host, opens, http_list, ssdp, mdns):
     return guesses
 
 
+
+def fingerprint_device(host, opens, http_list, extra_probes):
+    """Multi-path / multi-port fingerprint, v1.5.0.
+
+    Why: title-only identification fails on ISP gateways whose login
+    page is a JS shell (empty title, no Server header). The fingerprint
+    is the *combination* of: 80-page JS shell, 8080 JSON error string,
+    fixed-path-only 400 behaviour, and the open-port set. One item
+    alone is not proof; the combination is returned as a suspect
+    guess with its evidence, never as a confirmed model.
+    """
+    guesses, evidence = [], []
+    all_probes = list(http_list) + list(extra_probes)
+    bodies = " ".join((x.get("body_snippet") or "") for x in all_probes)
+    ctypes = " ".join((x.get("content_type") or "") for x in all_probes)
+    by_port_path = {(x.get("port"), x.get("path")): x for x in all_probes}
+    has_frmload = "frmLoad" in bodies
+    has_no_cmd = "no_cmd_match" in bodies
+    if has_frmload:
+        evidence.append("80 page is a frmLoad() JS shell (Broadcom-based telecom gateway firmware pattern)")
+    if has_no_cmd:
+        evidence.append("8080 returns application/json 'no_cmd_match' (Tianyi TEWA optical-modem pattern)")
+    login_400 = any(by_port_path.get((80, path), {}).get("status") == 400 for path in ("/login.html", "/main.html", "/robots.txt"))
+    root_200 = by_port_path.get((80, "/"), {}).get("status") == 200
+    if root_200 and login_400:
+        evidence.append("80 serves only fixed paths, other paths return 400 (not 404)")
+    if has_frmload and has_no_cmd:
+        guesses.append({"guess": "telecom_optical_modem_suspect", "evidence": "frmLoad JS shell on 80 + no_cmd_match JSON on 8080"})
+    elif has_no_cmd:
+        guesses.append({"guess": "telecom_optical_modem_suspect", "evidence": "8080 returns no_cmd_match JSON"})
+    elif has_frmload:
+        guesses.append({"guess": "telecom_gateway_firmware_suspect", "evidence": "80 page uses frmLoad() JS shell"})
+    if sorted(opens) == [53, 80, 8080]:
+        guesses.append({"guess": "isp_gateway_suspect", "evidence": "only DNS(53)+web(80)+8080 JSON API open, no SSH/Telnet/HTTPS management"})
+    return guesses, evidence
+
 def identify_host(a):
     host = a["host"]
     # Cast ports were missing from the old scan list, so a Cast TV
@@ -564,6 +600,16 @@ def identify_host(a):
                 http_list.append(http_get(host, p, path))
     # mDNS/SSDP with a longer timeout and several service types:
     # the old single short query returned empty even for a Cast TV.
+    # v1.5.0 fingerprint probes: 80 + 8080, several paths, because a
+    # single "/" title is empty on JS-shell gateways.
+    extra_probes = []
+    for p in (80, 8080):
+        if p in opens:
+            for path in ("/", "/login.html", "/favicon.ico"):
+                try:
+                    extra_probes.append(http_get(host, p, path))
+                except Exception:
+                    pass
     ssdp = ssdp_probe({"host": host, "timeout": 3}).get("devices", [])
     mdns = mdns_probe({"host": host, "timeout": 3}).get("services", [])
     try:
@@ -571,11 +617,36 @@ def identify_host(a):
     except Exception:
         hostname = ""
     mac = mac_of(host)
+    guesses = guess_device(host, opens, http_list, ssdp, mdns)
+    fp_guesses, fp_evidence = fingerprint_device(host, opens, http_list, extra_probes)
+    for g in fp_guesses:
+        if g not in guesses:
+            guesses.append(g)
+    mac_status = "available" if mac else "unavailable_on_this_phone"
     return {"host": host, "hostname": hostname, "mac": mac, "mac_vendor": "",
-            "open_ports": opens, "http": http_list, "ssdp": ssdp, "mdns": mdns,
-            "device_guess": guess_device(host, opens, http_list, ssdp, mdns),
-            "note": "綜合裝置自報資訊與 HTTP 指紋；唯讀。device_guess 只是猜測，需以服務名/標題為證據判斷。"}
+            "mac_status": mac_status,
+            "mac_note": "手機 ARP 表為空時 MAC 查不到，這是手機沙盒/VPN 問題，不是沒寫代碼。準確的 MAC 在路由器客戶端列表裡，用 router_clients（登入後唯讀）拿。",
+            "open_ports": opens, "http": http_list, "fingerprint_probes": extra_probes,
+            "fingerprint_evidence": fp_evidence, "ssdp": ssdp, "mdns": mdns,
+            "device_guess": guesses,
+            "note": "綜合裝置自報資訊與多路徑 HTTP 指紋；唯讀。device_guess 只是猜測，需以指紋證據判斷，具體型號要登入後看版本或看機身貼紙。"}
 
+
+
+def router_clients(a):
+    """Login once, read-only GET the router client list, return it.
+
+    This is the MAC source: the router's own DHCP/client list holds
+    IP+MAC+hostname together, which the phone ARP table cannot give
+    on this phone. Same safety as auth_fetch: one login, one read-only
+    GET, no settings changed, cookie kept inside this call only.
+    """
+    args = dict(a)
+    args.setdefault("path", a.get("client_path") or "/goform/GetIpMacBind")
+    out = auth_fetch(args)
+    out["tool"] = "router_clients"
+    out["note"] = "MAC 來自路由器客戶端列表，不是手機 ARP 表；未登入或路徑不對時，路由器會回登入頁或空數據，那不代表密碼錯，只代表這條路徑不是這台路由器的客戶端列表路徑。"
+    return out
 
 def http_post(a):
     host_in, path = a["host"], a.get("path", "/")
@@ -737,7 +808,7 @@ DISPATCH = {"device_info": device_info, "lan_scan": lan_scan, "ping": ping,
             "web_cred_context": web_cred_context, "http_probe": http_probe,
             "raw_probe": raw_probe, "ssdp_probe": ssdp_probe,
             "mdns_probe": mdns_probe, "identify_host": identify_host,
-            "http_post": http_post, "auth_fetch": auth_fetch}
+            "http_post": http_post, "auth_fetch": auth_fetch, "router_clients": router_clients}
 
 
 def _spec(name, desc, props, required):
@@ -786,6 +857,10 @@ TOOLS = [
           {"host": {"type": "string"}, "port": {"type": "integer"}, "path": {"type": "string"},
            "login_path": {"type": "string"}, "username": {"type": "string"},
            "password": {"type": "string"}, "password_md5": {"type": "string"}}, ["host", "path"]),
+    _spec("router_clients", "登入路由器後唯讀抓客戶端列表（IP+MAC+設備名），這是 MAC 的準確來源。登入方式與 auth_fetch 相同，一次登入、一次唯讀 GET、不改設定、Cookie 不回值。client_path 預設 /goform/GetIpMacBind，不同品牌路徑不同，路徑不對時回登入頁或空數據。",
+          {"host": {"type": "string"}, "port": {"type": "integer"}, "path": {"type": "string"},
+           "client_path": {"type": "string"}, "login_path": {"type": "string"}, "username": {"type": "string"},
+           "password": {"type": "string"}, "password_md5": {"type": "string"}}, ["host"]),
 ]
 
 

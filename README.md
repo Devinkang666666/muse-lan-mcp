@@ -1,7 +1,7 @@
 # LAN MCP: Scan Your LAN with AI
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-16_tools-green.svg)](https://modelcontextprotocol.io/)
+[![MCP](https://img.shields.io/badge/MCP-17_tools-green.svg)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Termux%20%2F%20Android-orange.svg)](https://termux.dev/)
 
@@ -28,7 +28,7 @@ Basic familiarity with typing commands in a terminal is helpful. Every step belo
 - Ping hosts and probe TCP ports.
 - Send one HTTP POST to a private-LAN address (for example a router login page).
 - Log in to a router web page and fetch one page read-only, in a single server-side call (`auth_fetch`). The session cookie is used only inside the server, never returned and never stored.
-- 16 tools in total (v1.4.0 identification upgrade, no new tool count): `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`.
+- 17 tools in total (v1.5.0 fingerprint upgrade): `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch, router_clients`. `identify_host` now probes 80 and 8080 on several paths and matches fingerprints (for example a frmLoad JS shell on 80 plus a `no_cmd_match` JSON reply on 8080 points to a telecom optical modem family), and `router_clients` reads a router client list after login, which is the accurate source for MAC addresses when the phone ARP table is empty.
 
 ## Operation Images
 

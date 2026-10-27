@@ -1,7 +1,7 @@
 # LAN MCP：用 AI 幫你掃內網
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-16_tools-green.svg)](https://modelcontextprotocol.io/)
+[![MCP](https://img.shields.io/badge/MCP-17_tools-green.svg)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Termux%20%2F%20Android-orange.svg)](https://termux.dev/)
 
@@ -28,7 +28,7 @@ LAN MCP 是一個跑在 Android 手機上的 MCP（模型上下文協議）伺�
 - ping 主機、探測 TCP 端口。
 - 對內網地址發一次 HTTP POST（例如路由器登入頁）。
 - 登入路由器網頁後唯讀取回一頁，同一次伺服器內呼叫完成（`auth_fetch`）。會話 Cookie 只在伺服器內部用，不回值、不存檔。
-- 共 16 個工具（v1.4.0 認設備升級，工具數不變）：`device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`。
+- 共 17 個工具（v1.5.0 指紋升級）：`device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch, router_clients`。`identify_host` 現在會多路徑探測 80 和 8080 並比對指紋（例如 80 的 frmLoad JS 殼加上 8080 的 `no_cmd_match` JSON 回應，指向電信光貓家族），`router_clients` 則是登入後唯讀抓路由器客戶端列表，手機 ARP 表為空時，這才是 MAC 的準確來源。
 
 ## 操作圖片
 
