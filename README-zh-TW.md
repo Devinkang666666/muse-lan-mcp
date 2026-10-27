@@ -1,7 +1,7 @@
 # LAN MCP：用 AI 幫你掃內網
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-17_tools-green.svg)](https://modelcontextprotocol.io/)
+[![MCP](https://img.shields.io/badge/MCP-18_tools-green.svg)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Termux%20%2F%20Android-orange.svg)](https://termux.dev/)
 
@@ -9,7 +9,7 @@
 
 ## 這是什麼
 
-LAN MCP 是一個跑在 Android 手機上的 MCP（模型上下文協議）伺服器。它讓 AI 助手掃描、識別家裡內網的設備，登入路由器後唯讀查看資訊，而不用把內網設備直接暴露給外網。
+LAN MCP 是一個跑在 Android 手機上的 MCP（模型上下文協議）伺服器。它不再只是小小的內網掃描，而是一套網路審計工具。它讓 AI 助手掃描、識別家裡內網的設備，審計主機的開放服務和外洩密碼，登入路由器後唯讀查看資訊，檢查附近 WiFi 的加密方式，還能做手機本地檢查，而不用把內網設備直接暴露給外網。
 
 簡單說：手機本來就連著家裡 Wi-Fi，手機跑伺服器，遠端的 AI 助手連到手機，手機再幫它做內網的工作。
 
@@ -28,7 +28,7 @@ LAN MCP 是一個跑在 Android 手機上的 MCP（模型上下文協議）伺�
 - ping 主機、探測 TCP 端口。
 - 對內網地址發一次 HTTP POST（例如路由器登入頁）。
 - 登入路由器網頁後唯讀取回一頁，同一次伺服器內呼叫完成（`auth_fetch`）。會話 Cookie 只在伺服器內部用，不回值、不存檔。
-- 共 17 個工具（v1.5.0 指紋升級）：`device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch, router_clients`。`identify_host` 現在會多路徑探測 80 和 8080 並比對指紋（例如 80 的 frmLoad JS 殼加上 8080 的 `no_cmd_match` JSON 回應，指向電信光貓家族），`router_clients` 則是登入後唯讀抓路由器客戶端列表，手機 ARP 表為空時，這才是 MAC 的準確來源。
+- 共 18 個工具（v1.7.1 重大更新）：`device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch, router_clients, shell`。`identify_host` 會多路徑探測 80 和 8080 並比對指紋（例如 80 的 frmLoad JS 殼加上 8080 的 `no_cmd_match` JSON 回應，指向電信光貓家族），`router_clients` 是登入後唯讀抓路由器客戶端列表，手機 ARP 表為空時，這才是 MAC 的準確來源，`shell` 則是在手機本機跑一條 shell 命令。`device_info` 現在會回 `network_mode`（內網是 `lan`，移動網絡是 `non_lan`）；移動網絡下內網掃描不能用，但本地工具（`device_info`、`shell`）還能用。公網地址預設一律拒絕，只有機主明確開開關才能用（啟動時設 `MUSE_ALLOW_PUBLIC=1`，或在手機上建一個空的 `~/.lan_mcp_allow_public` 文件），用完必須再關掉。
 
 ## 操作圖片
 
@@ -145,7 +145,7 @@ chmod +x ~/start-lan.sh
 
 ## 安全硬線
 
-- 只接內網：公網 IP 一律拒絕，主機名只在解析到私有／回環地址時才放行。
+- 預設只接內網：公網 IP 一律拒絕，主機名只在解析到私有／回環地址時才放行；只有機主明確開開關（啟動時設 `MUSE_ALLOW_PUBLIC=1`，或建 `~/.lan_mcp_allow_public` 空文件）才能連公網，用完必須再關掉。
 - 認證：環境變數 `MUSE_TOKEN` 有值時，必須帶 `Authorization: Bearer <MUSE_TOKEN>`，否則回 401。經 ngrok 對外時務必設令牌，不要空跑。
 - 登入後唯讀：`auth_fetch` 登入後只做 GET，不改任何設備設定。不要用 `Set*` 類接口。
 - 密碼處理：登入密碼只在呼叫時傳，伺服器內部轉 MD5（如果接口需要），不寫進檔案、不寫進日誌，頁面片段裡的密碼會被遮罩。

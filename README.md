@@ -1,7 +1,7 @@
 # LAN MCP: Scan Your LAN with AI
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-17_tools-green.svg)](https://modelcontextprotocol.io/)
+[![MCP](https://img.shields.io/badge/MCP-18_tools-green.svg)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Termux%20%2F%20Android-orange.svg)](https://termux.dev/)
 
@@ -9,11 +9,11 @@
 
 ## What Is This
 
-LAN MCP is a Model Context Protocol (MCP) server that runs on an Android phone. It lets an AI assistant scan and identify devices on a home local area network (LAN), and read router information after login, without exposing LAN devices directly to the outside internet.
+LAN MCP is a Model Context Protocol (MCP) server that runs on an Android phone. It is no longer just a small LAN scanner: it is a network audit tool. It lets an AI assistant scan and identify devices on a home local area network (LAN), audit hosts for exposed services and leaked credentials, read router information after login, check nearby Wi-Fi networks and encryption, and run local phone checks, without exposing LAN devices directly to the outside internet.
 
-In short: the phone is already on the home Wi-Fi. The phone runs the server. A remote AI assistant connects to the phone, and the phone does the LAN work on its behalf.
+In short: the phone is already on the home Wi-Fi. The phone runs the server. A remote AI assistant connects to the phone, and the phone does the network audit work on its behalf.
 
-This is useful when the AI assistant is running somewhere else (for example in the cloud) and cannot reach `192.168.x.x` addresses directly. The phone acts as a bridge between the remote AI and the home LAN.
+This is useful when the AI assistant is running somewhere else (for example in the cloud) and cannot reach `192.168.x.x` addresses directly. The phone acts as a bridge between the remote AI and the home network.
 
 ## Who Is This For
 
@@ -28,7 +28,7 @@ Basic familiarity with typing commands in a terminal is helpful. Every step belo
 - Ping hosts and probe TCP ports.
 - Send one HTTP POST to a private-LAN address (for example a router login page).
 - Log in to a router web page and fetch one page read-only, in a single server-side call (`auth_fetch`). The session cookie is used only inside the server, never returned and never stored.
-- 17 tools in total (v1.5.0 fingerprint upgrade): `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch, router_clients`. `identify_host` now probes 80 and 8080 on several paths and matches fingerprints (for example a frmLoad JS shell on 80 plus a `no_cmd_match` JSON reply on 8080 points to a telecom optical modem family), and `router_clients` reads a router client list after login, which is the accurate source for MAC addresses when the phone ARP table is empty.
+- 18 tools in total (v1.7.1 major update): `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch, router_clients, shell`. `identify_host` probes 80 and 8080 on several paths and matches fingerprints (for example a frmLoad JS shell on 80 plus a `no_cmd_match` JSON reply on 8080 points to a telecom optical modem family), `router_clients` reads a router client list after login, which is the accurate source for MAC addresses when the phone ARP table is empty, and `shell` runs one shell command on the phone itself. `device_info` now reports `network_mode` (`lan` on a private LAN, `non_lan` on mobile data); on a non-LAN network, LAN scanning is unavailable, but local tools (`device_info`, `shell`) still work. Public IP targets are rejected by default; they can be enabled only by an explicit owner switch (`MUSE_ALLOW_PUBLIC=1` at start, or an empty `~/.lan_mcp_allow_public` file on the phone), and the switch must be turned off again when idle.
 
 ## Operation Images
 
@@ -145,7 +145,7 @@ Do not rely on the default subnet: if the phone is on a VPN or Warp virtual path
 
 ## Safety Rules
 
-- Private LAN only. Public IP addresses are always rejected. Hostnames are allowed only when they resolve to a private or loopback address.
+- Private LAN only by default. Public IP addresses are rejected unless the owner explicitly enables the public switch (`MUSE_ALLOW_PUBLIC=1` at start, or an empty `~/.lan_mcp_allow_public` file on the phone). Turn the switch off again when idle. Hostnames are allowed only when they resolve to a private or loopback address, unless the switch is on.
 - Authentication. When `MUSE_TOKEN` is set, requests must carry `Authorization: Bearer <MUSE_TOKEN>`, otherwise they return 401. When exposed through ngrok, always set a token. Never run the server open.
 - Read-only after login. `auth_fetch` only does GET after login and changes no device settings. Do not use `Set*` endpoints.
 - Password handling. A login password is passed only at call time, converted to MD5 inside the server if the endpoint needs it, never written to a file or a log, and passwords in page snippets are masked.

@@ -46,9 +46,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.5.0"
+VERSION = "1.7.1"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
+ALLOW_PUBLIC = os.environ.get("MUSE_ALLOW_PUBLIC", "") == "1" or os.path.exists(os.path.join(os.path.expanduser("~"), ".lan_mcp_allow_public"))
+
+
+def _ip_allowed(ip):
+    return ALLOW_PUBLIC or ip.is_private or ip.is_loopback
 DEFAULT_PORTS = [21, 22, 23, 53, 80, 139, 443, 445, 554, 1883, 3389,
                  5000, 5353, 7000, 8000, 8008, 8009, 8080, 8443, 8888, 9100, 62078]
 
@@ -143,10 +148,23 @@ def exposed_secrets_from(body):
 
 
 # ---- 工具本體 ----
+def network_mode():
+    ip = local_ip()
+    try:
+        addr = ipaddress.ip_address(ip)
+        if addr.is_private or addr.is_loopback:
+            return "lan"
+    except Exception:
+        pass
+    return "non_lan"
+
+
 def device_info(_a):
     import platform
     return {"os": f"{platform.system()}-{platform.release()}-{platform.machine()}",
             "hostname": socket.gethostname(), "local_ip": local_ip(),
+            "network_mode": network_mode(),
+            "allow_public": ALLOW_PUBLIC,
             "python": sys.version.split()[0], "muse_lan_mcp_version": VERSION}
 
 
@@ -154,6 +172,8 @@ def lan_scan(a):
     subnet = a.get("subnet") or ""
     ports = a.get("ports") or DEFAULT_PORTS
     if not subnet:
+        if network_mode() != "lan":
+            return {"subnet": "", "error": "phone is not on a private LAN (network_mode=non_lan, local_ip=" + local_ip() + "); LAN scan needs a WiFi LAN, local tools (device_info, shell) still work", "devices": []}
         base = ".".join(local_ip().split(".")[:3]) + ".0/24"
         subnet = base
     try:
@@ -633,6 +653,29 @@ def identify_host(a):
 
 
 
+
+def shell(a):
+    """Run a shell command on the phone itself, return output.
+
+    Owner-only, unrestricted by user order 2026-10-27 ("放開做").
+    Runs as the Termux user, not root. Timeout 120s, output capped
+    at 20000 chars. This tool is why the Bearer token must never leak:
+    anyone with the token gets a shell on the phone, not just a LAN scan.
+    No Gist, no second token needed: it rides the existing MCP tunnel.
+    """
+    cmd = a.get("command", "")
+    if not cmd:
+        return {"error": "需要 command"}
+    timeout = float(a.get("timeout", 120))
+    try:
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        out = (r.stdout or "") + (r.stderr or "")
+        return {"command": cmd, "exit_code": r.returncode, "output": out[:20000]}
+    except subprocess.TimeoutExpired:
+        return {"command": cmd, "exit_code": 124, "output": "[TIMEOUT]", "error": f"超過 {timeout}s"}
+    except Exception as e:
+        return {"command": cmd, "exit_code": 1, "output": "", "error": str(e)}
+
 def router_clients(a):
     """Login once, read-only GET the router client list, return it.
 
@@ -665,8 +708,8 @@ def http_post(a):
             connect_host = resolved
         except Exception as e:
             return {"host": host_in, "error": f"主機名解析失敗：{e}"}
-    if not (ip.is_private or ip.is_loopback):
-        return {"host": host_in, "resolved_ip": resolved, "error": "只允許內網 IP，拒絕公網位址"}
+    if not _ip_allowed(ip):
+        return {"host": host_in, "resolved_ip": resolved, "error": "只允許內網 IP，拒絕公網位址（開關未開：設 MUSE_ALLOW_PUBLIC=1 或建 ~/.lan_mcp_allow_public 再重起）"}
     if not path.startswith("/"):
         path = "/" + path
     body = urlencode(form) if form else ""
@@ -705,7 +748,7 @@ def http_post(a):
                         rip = ipaddress.ip_address(socket.gethostbyname(u.hostname))
                     except Exception:
                         break
-                    if not (rip.is_private or rip.is_loopback):
+                    if not _ip_allowed(rip):
                         break
                     cur_host, cur_port, cur_path = u.hostname, (u.port or 80), (u.path or "/")
                 else:
@@ -758,8 +801,8 @@ def auth_fetch(a):
         ip = ipaddress.ip_address(resolved)
     except Exception as e:
         return {"host": host_in, "resolved_ip": resolved, "error": str(e)}
-    if not (ip.is_private or ip.is_loopback):
-        return {"host": host_in, "resolved_ip": resolved, "error": "只允許內網 IP，拒絕公網位址"}
+    if not _ip_allowed(ip):
+        return {"host": host_in, "resolved_ip": resolved, "error": "只允許內網 IP，拒絕公網位址（開關未開：設 MUSE_ALLOW_PUBLIC=1 或建 ~/.lan_mcp_allow_public 再重起）"}
     if not path.startswith("/"):
         path = "/" + path
     if not login_path.startswith("/"):
@@ -808,7 +851,7 @@ DISPATCH = {"device_info": device_info, "lan_scan": lan_scan, "ping": ping,
             "web_cred_context": web_cred_context, "http_probe": http_probe,
             "raw_probe": raw_probe, "ssdp_probe": ssdp_probe,
             "mdns_probe": mdns_probe, "identify_host": identify_host,
-            "http_post": http_post, "auth_fetch": auth_fetch, "router_clients": router_clients}
+            "http_post": http_post, "auth_fetch": auth_fetch, "router_clients": router_clients, "shell": shell}
 
 
 def _spec(name, desc, props, required):
@@ -861,6 +904,8 @@ TOOLS = [
           {"host": {"type": "string"}, "port": {"type": "integer"}, "path": {"type": "string"},
            "client_path": {"type": "string"}, "login_path": {"type": "string"}, "username": {"type": "string"},
            "password": {"type": "string"}, "password_md5": {"type": "string"}}, ["host"]),
+    _spec("shell", "在手機本機跑一條 shell 命令，回輸出與退出碼。用戶 2026-10-27 親定放開做，僅限機主本人經 Bearer token 使用；token 外洩等於手機 shell 外洩，用完務必關隧道。超時 120 秒，輸出截 20000 字。",
+          {"command": {"type": "string"}, "timeout": {"type": "number"}}, ["command"]),
 ]
 
 
@@ -919,7 +964,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     srv = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Muse LAN MCP v{VERSION} listening on 0.0.0.0:{PORT} /mcp, tools={len(TOOLS)}", flush=True)
+    print(f"Muse LAN MCP v{VERSION} listening on 0.0.0.0:{PORT} /mcp, tools={len(TOOLS)}, allow_public={ALLOW_PUBLIC}", flush=True)
+    if ALLOW_PUBLIC:
+        print("WARNING: allow_public is ON - public IP targets are allowed, close the tunnel when done.", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
