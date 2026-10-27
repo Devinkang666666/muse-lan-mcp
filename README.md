@@ -2,6 +2,17 @@
 
 繁體中文在前，英文在後。Traditional Chinese first, English second.
 
+## 操作圖片 / Operation Images
+
+繁體中文：下面三張是示意圖，不是真實截圖，圖裡的命令不用照抄，真正要跑的命令以本文為準。
+English: The three images below are illustrations, not real screenshots. Do not copy commands from the images; follow the commands in this README.
+
+![架構 / Architecture](images/operation-architecture.webp)
+
+![一鍵啟動 / One-Click Start](images/operation-start.webp)
+
+![認設備 / Identify Devices](images/operation-scan.webp)
+
 ---
 
 ## 概覽 / Overview
