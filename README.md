@@ -155,6 +155,33 @@ Do not rely on the default subnet: if the phone is on a VPN or Warp virtual path
 - Password handling. A login password is passed only at call time, converted to MD5 inside the server if the endpoint needs it, never written to a file or a log, and passwords in page snippets are masked.
 - Secrets. Tokens, passwords, Cookie values, authtokens, and tunnel domains must never be written into a public repository or shared with other people. Each user scans their own LAN, not someone else's.
 
+## Usage Examples
+
+Audit in this order, and record the evidence for each step instead of guessing an identity from one signal:
+
+1. Confirm the phone is on the LAN: `device_info` must show `network_mode: "lan"` and a private local IP. On mobile data it shows `non_lan`; LAN tools are then unavailable, but `device_info` and `shell` still work.
+2. Scan the subnet explicitly: `lan_scan` with `{"subnet": "192.168.1.0/24"}`. List live hosts and open ports first, before naming anything.
+3. Identify a host: `identify_host` probes several paths on ports 80 and 8080 and matches fingerprints. A family-level result (for example a telecom optical modem family) is not an exact model; an exact model requires a logged-in version page or a device label.
+4. Audit a host: `audit_host` checks for exposed services and leaked credentials in unauthenticated page content. An empty result means nothing is visible without login, not that the firmware or configuration is secure.
+5. Read router clients after login: `router_clients` logs in and reads the router client list read-only. This is the authoritative IP, MAC, and hostname source, because Android Termux cannot read the phone ARP table (see Known Issues).
+6. Check nearby Wi-Fi: on the phone, `termux-wifi-scaninfo` (requires the Termux:API app and location permission) lists nearby SSIDs, signal, and encryption. A connected phone can still report a saved SSID even when the access point hides it, so a hidden-network claim must be checked on the router settings page, not from the phone scan alone.
+7. Turn off when done: `~/start-lan.sh stop`, and remove the `~/.lan_mcp_allow_public` file if the public switch was enabled.
+
+## Known Issues and How They Were Solved
+
+These are real problems met during field testing on Android/Termux, written here so the next user does not repeat them:
+
+- **Tunnel domain already in use (`ERR_NGROK_334`).** Cause: a free ngrok account holds only one tunnel at a time; a second tunnel on the same domain collides. Fix: stop the old tunnel first (`~/start-lan.sh stop`, or `pkill ngrok`), then start again. Do not enable tunnel pooling on a free account.
+- **ngrok cannot resolve its own server (`lookup ... on [::1]:53: connection refused`).** Cause: the Termux dead resolver `[::1]:53` does not answer. Fix: create `~/resolv.conf` with the home router address and a public DNS, and start ngrok through `proot -b ~/resolv.conf:/etc/resolv.conf`. `start-lan.sh` already does this.
+- **Tunnel heartbeat timeouts and HTTP 404 from the public address.** Cause: the tunnel session dropped (network switch, Wi-Fi disconnect, or unstable mobile data), while the local MCP process kept running. A `start-lan.sh` completion line alone does not prove the tunnel is up. Fix: confirm a fresh `started tunnel` line in `~/ngrok-lan.log` and a successful remote `device_info` call; if the tunnel is down, run `~/start-lan.sh stop` then `~/start-lan.sh` on a stable Wi-Fi connection.
+- **A scan returns every host with every port open.** Cause: the phone is on a VPN or Warp virtual path, so the default subnet is a virtual subnet, not the home LAN. Fix: always specify the home subnet explicitly, as in Step 7, and check `device_info` first.
+- **MAC addresses are empty in `lan_scan`.** Cause: Android sandbox/SELinux blocks Termux from reading `/proc/net/arp` (`Permission denied`) and from `ip neigh` netlink. This is a platform limit, not a code omission. Fix: use `router_clients` after router login for authoritative MAC data.
+- **Router login succeeds once, then fails with the same password.** Cause: some routers (observed on Tenda) allow only one online session, or lock after repeated failures. A single failure does not prove the password is wrong. Fix: check the login-info endpoint for lock state and remaining attempts, wait for the lock to clear, and retry once; never brute-force.
+- **A router settings page shows only an overview, not the detailed dialog.** Cause: the settings UI is an icon grid; the detail dialog opens only from its specific tile, and a click on the surrounding text container returns the same overview. Fix: click the exact tile (for example "Wireless Name and Password"), and verify from the dialog fields themselves, not from the overview summary.
+- **Termux:API commands time out with no output.** Cause: the `termux-api` package is installed, but the companion Termux:API Android app is missing (Termux:X11 is a different app, a graphical display, not the API app). Fix: install the matching Termux:API app (F-Droid build for an F-Droid Termux install), then grant location permission for Wi-Fi SSID results; without it, SSIDs report as `<unknown ssid>` and MACs as `02:00:00:00:00:00`.
+- **Update does not take effect after copying a new file.** Cause: `start-lan.sh` reuses a running MCP process instead of restarting it. Fix: always run `~/start-lan.sh stop` before `~/start-lan.sh` after an update, and use a versioned file name (for example `muse_lan_mcp_v171.py`) so the correct copy is installed.
+- **Identification stops at family level.** Cause: internet search and unauthenticated probing can classify a device family, but cannot establish an exact model. Fix: treat family-level results as suspects, and confirm the exact model only from a logged-in version page or a device label. Do not present a family guess as a confirmed model, and do not use a vendor "super password" to bypass login.
+
 ## Troubleshooting
 
 - `ERR_NGROK_334` (domain already in use): stop the old tunnel first with `pkill ngrok`, then run `~/start-lan.sh` again. The script already does this on start.
