@@ -1,6 +1,8 @@
-# PhoneSentinel AI: AI-Powered Phone Network Patrol
+# SentinelMind: The Phone Sentinel with a Mind
 
-> PhoneSentinel AI is an AI-powered phone network patrol tool, not just an MCP server. The core is AI capability: the AI reads, identifies, and judges the network through the phone. MCP is only the underlying protocol that connects the AI to the phone. What the user gets is a phone that patrols the network, with audit-grade inspection.
+> SentinelMind is an AI-powered phone network patrol tool, not just an MCP server. Sentinel is the guard, Mind is the brain: a sentinel that thinks, identifies, judges, and explains, not a scanner that only lists ports. MCP is only the underlying protocol that connects the AI to the phone. What the user gets is a phone that patrols the network, with audit-grade inspection.
+>
+> Zero Hardware, Phone as the Patrol Device: no extra hardware to buy, no appliance to deploy. The phone you already carry is the patrol device.
 >
 > Zero Hardware, Phone as the Patrol Device: no extra hardware to buy, no appliance to deploy. The phone you already carry is the patrol device.
 
@@ -13,7 +15,7 @@
 
 ## What Is This
 
-This is PhoneSentinel AI, an AI-powered phone network patrol tool. The phone itself is the patrol device: it runs on an Android phone, and an AI assistant patrols the network through the phone, with audit-grade inspection. The AI is the core: it identifies devices, judges risks, and explains findings, not just lists ports. It is no longer positioned as an MCP server, and no longer just a small LAN scanner.
+This is SentinelMind, an AI-powered phone network patrol tool. The phone itself is the patrol device: it runs on an Android phone, and an AI assistant patrols the network through the phone, with audit-grade inspection. The AI is the core: it identifies devices, judges risks, and explains findings, not just lists ports. It is no longer positioned as an MCP server, and no longer just a small LAN scanner.
 
 It lets an AI assistant scan and identify devices on a home local area network (LAN), audit hosts for exposed services and leaked credentials, read router information after login, check nearby Wi-Fi networks and encryption, and run local phone checks, without exposing LAN devices directly to the outside internet.
 
