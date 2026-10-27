@@ -28,7 +28,7 @@ Basic familiarity with typing commands in a terminal is helpful. Every step belo
 - Ping hosts and probe TCP ports.
 - Send one HTTP POST to a private-LAN address (for example a router login page).
 - Log in to a router web page and fetch one page read-only, in a single server-side call (`auth_fetch`). The session cookie is used only inside the server, never returned and never stored.
-- 16 tools in total: `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`.
+- 16 tools in total (v1.4.0 identification upgrade, no new tool count): `device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`.
 
 ## Operation Images
 

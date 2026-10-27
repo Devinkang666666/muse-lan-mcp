@@ -46,11 +46,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.2.0"
+VERSION = "1.4.0"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
 DEFAULT_PORTS = [21, 22, 23, 53, 80, 139, 443, 445, 554, 1883, 3389,
-                 5000, 5353, 7000, 8000, 8008, 8080, 8443, 8888, 9100, 62078]
+                 5000, 5353, 7000, 8000, 8008, 8009, 8080, 8443, 8888, 9100, 62078]
 
 
 def local_ip():
@@ -174,9 +174,16 @@ def lan_scan(a):
             elif st == "closed":
                 rst = True
         if opens:
-            return {"ip": host, "name": "", "open_ports": opens, "alive_by": "open_port", "mac": ""}
+            guess = []
+            if 554 in opens:
+                guess.append("camera_or_nvr_suspect")
+            if 8008 in opens or 8009 in opens:
+                guess.append("cast_tv_suspect")
+            return {"ip": host, "name": "", "open_ports": opens, "alive_by": "open_port", "mac": "",
+                    "device_guess": guess}
         if rst:
-            return {"ip": host, "name": "", "open_ports": [], "alive_by": "tcp_rst", "mac": ""}
+            return {"ip": host, "name": "", "open_ports": [], "alive_by": "tcp_rst", "mac": "",
+                    "device_guess": []}
         return None
 
     with ThreadPoolExecutor(max_workers=50) as ex:
@@ -519,20 +526,55 @@ def mac_of(host):
     return ""
 
 
+def guess_device(host, opens, http_list, ssdp, mdns):
+    """Port + title + service based guess, like the screenshot app.
+
+    A guess is only a guess: 554 alone is not proof of a camera,
+    8008/8009 alone is not proof of a Cast TV. The guess is returned
+    with its evidence so the caller can judge, never as a confirmed
+    identity. Read-only.
+    """
+    guesses = []
+    titles = " ".join((h.get("title") or "") for h in http_list).lower()
+    services = " ".join(
+        str(s.get("name", "")) + " " + str(s.get("type", "")) for s in (ssdp + mdns)).lower()
+    if "wmc180" in titles or "wireless router" in titles:
+        guesses.append({"guess": "router", "evidence": "http title"})
+    if 554 in opens:
+        guesses.append({"guess": "camera_or_nvr_suspect", "evidence": "port 554 open (RTSP)"})
+    if 8008 in opens or 8009 in opens or "googlecast" in services or "chromecast" in services:
+        guesses.append({"guess": "cast_tv_suspect", "evidence": "port 8008/8009 or googlecast service"})
+    if "dlna" in services or "mediaserver" in services:
+        guesses.append({"guess": "media_server_suspect", "evidence": "ssdp/dlna service"})
+    if 80 in opens and not guesses:
+        guesses.append({"guess": "web_device", "evidence": "port 80 open"})
+    return guesses
+
+
 def identify_host(a):
     host = a["host"]
-    ports = (a.get("ports") or []) + DEFAULT_PORTS + [9000]
+    # Cast ports were missing from the old scan list, so a Cast TV
+    # could be missed entirely. Add them here for identification.
+    ports = (a.get("ports") or []) + DEFAULT_PORTS + [9000, 8009, 8443]
     opens = [p for p in sorted(set(ports)) if tcp_check(host, p, timeout=1.0) == "open"]
     http_list = []
     for p in opens:
-        if p in (80, 8080, 8443, 8000, 8888, 9000):
+        if p in (80, 8080, 8443, 8000, 8008, 8888, 9000):
             for path in (a.get("paths") or ["/"]):
                 http_list.append(http_get(host, p, path))
-    ssdp = ssdp_probe({"host": host, "timeout": 2}).get("devices", [])
-    mdns = mdns_probe({"host": host, "timeout": 2}).get("services", [])
-    return {"host": host, "mac": mac_of(host), "mac_vendor": "", "open_ports": opens,
-            "http": http_list, "ssdp": ssdp, "mdns": mdns,
-            "note": "綜合裝置自報資訊與 HTTP 指紋；唯讀。"}
+    # mDNS/SSDP with a longer timeout and several service types:
+    # the old single short query returned empty even for a Cast TV.
+    ssdp = ssdp_probe({"host": host, "timeout": 3}).get("devices", [])
+    mdns = mdns_probe({"host": host, "timeout": 3}).get("services", [])
+    try:
+        hostname, _, _ = socket.gethostbyaddr(host)
+    except Exception:
+        hostname = ""
+    mac = mac_of(host)
+    return {"host": host, "hostname": hostname, "mac": mac, "mac_vendor": "",
+            "open_ports": opens, "http": http_list, "ssdp": ssdp, "mdns": mdns,
+            "device_guess": guess_device(host, opens, http_list, ssdp, mdns),
+            "note": "綜合裝置自報資訊與 HTTP 指紋；唯讀。device_guess 只是猜測，需以服務名/標題為證據判斷。"}
 
 
 def http_post(a):

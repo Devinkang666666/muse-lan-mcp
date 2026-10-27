@@ -28,7 +28,7 @@ LAN MCP 是一個跑在 Android 手機上的 MCP（模型上下文協議）伺�
 - ping 主機、探測 TCP 端口。
 - 對內網地址發一次 HTTP POST（例如路由器登入頁）。
 - 登入路由器網頁後唯讀取回一頁，同一次伺服器內呼叫完成（`auth_fetch`）。會話 Cookie 只在伺服器內部用，不回值、不存檔。
-- 共 16 個工具：`device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`。
+- 共 16 個工具（v1.4.0 認設備升級，工具數不變）：`device_info, lan_scan, ping, tcp_ports, banner, web_audit, audit_host, mqtt_probe, web_cred_context, http_probe, raw_probe, ssdp_probe, mdns_probe, identify_host, http_post, auth_fetch`。
 
 ## 操作圖片
 
