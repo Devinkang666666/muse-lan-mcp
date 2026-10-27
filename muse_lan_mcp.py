@@ -46,7 +46,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.7.3"
+VERSION = "1.7.4"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
 ALLOW_PUBLIC = os.environ.get("MUSE_ALLOW_PUBLIC", "") == "1" or os.path.exists(os.path.join(os.path.expanduser("~"), ".lan_mcp_allow_public"))
@@ -693,6 +693,17 @@ def identify_host(a):
 
 
 
+def audit_log(tool, detail, exit_code):
+    """Append one line to ~/muse-lan-audit.log so the phone owner can tail -f it live.
+    Detail is truncated and password values are masked by mask_passwords()."""
+    try:
+        import datetime
+        line = datetime.datetime.now().isoformat(timespec="seconds") + " " + tool + " exit=" + str(exit_code) + " " + mask_passwords(detail)[:500] + "\n"
+        with open(os.path.expanduser("~/muse-lan-audit.log"), "a") as f:
+            f.write(line)
+    except Exception:
+        pass
+
 def shell(a):
     """Run a shell command on the phone itself, return output.
 
@@ -709,8 +720,10 @@ def shell(a):
     try:
         r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
         out = (r.stdout or "") + (r.stderr or "")
+        audit_log("shell", cmd, r.returncode)
         return {"command": cmd, "exit_code": r.returncode, "output": out[:20000]}
     except subprocess.TimeoutExpired:
+        audit_log("shell", cmd, 124)
         return {"command": cmd, "exit_code": 124, "output": "[TIMEOUT]", "error": f"exceeded {timeout}s"}
     except Exception as e:
         return {"command": cmd, "exit_code": 1, "output": "", "error": str(e)}
