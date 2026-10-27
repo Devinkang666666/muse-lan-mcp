@@ -1,35 +1,35 @@
 #!/usr/bin/env python3
-"""Muse 專用居域網檢查 MCP 伺服器（重建版，不依賴 Hark 原檔）.
+"""SentinelMind LAN audit MCP server (rebuilt, stdlib only).
 
 "version": "1.2.0"
-放開版（使用者 2026-10-27 親定：Hark 太保守，Muse 可以放開做）：
-    http_post 可跟隨跳轉、可選回 Cookie 值、可接受解析到內網的主機名；
-    mqtt_probe 恢復訂閱抓主題；tcp_ports 上限放寬到 200。
-1.2.0 新增 auth_fetch（使用者 2026-10-27 親定：登入後要能看所有資訊，
-只登入不給看就失去意義）：
-    在同一次呼叫內先 POST 登入，再用登入 Cookie 做一次唯讀 GET，
-    Cookie 只在伺服器內部用，不回值、不存檔、不改設定。
-唯一保留的硬線：只接內網。因為伺服器經 ngrok 對外，Bearer token
-一旦外洩，放開到公網就等於把伺服器變成公開代理，這不是保守，
-是會反傷使用者自己的線，所以不放。
-來源：按 2026-10-27 實測的原伺服器 tools/list 與各工具行為重建，
-原 14 個工具全保留，新增第 15 個工具 http_post（單次 POST 登入用）。
-標準庫 only，不用 pip 裝任何東西，手機 Termux Python 3.12+ 可直接跑。
+Open version (owner decision 2026-10-27):
+    http_post can follow redirects, optionally return cookie values, and accept hostnames resolving to a LAN IP;
+    mqtt_probe subscribes for topic names again; tcp_ports cap raised to 200.
+1.2.0 added auth_fetch (owner decision 2026-10-27: login must allow viewing all information,
+login without viewing is pointless):
+    In one call, POST login first, then do one read-only GET with the login cookie,
+    Cookie is used only inside the server, never returned, never stored, no settings changed.
+Hard line kept: LAN only by default. Because the server is exposed via ngrok, a leaked Bearer token
+token opened to the public internet would turn the server into a public proxy. This is not conservatism,
+it would harm the owner, so it is not opened by default.
+Source: rebuilt from the original server tools/list and tool behavior tested 2026-10-27,
+All original 14 tools kept, plus a 15th tool http_post (single POST for login).
+Standard library only, no pip packages needed, runs directly on phone Termux Python 3.12+.
 
-啟動（手機 Termux，一次一條）：
+Start (phone Termux, one command at a time):
     MUSE_TOKEN="$(cat ~/.muse_token)" nohup python ~/muse_lan_mcp.py > ~/mcp.log 2>&1 &
     sleep 2; tail -n 20 ~/mcp.log
-預設監聽 0.0.0.0:8765，路徑 /mcp。
-認證：若環境變數 MUSE_TOKEN 有值，必須帶
+Default listen 0.0.0.0:8765, path /mcp.
+Auth: if env MUSE_TOKEN is set, requests must carry
     Authorization: Bearer <MUSE_TOKEN>
-    否則回 401；若未設 MUSE_TOKEN 則不驗證（僅限本機測試用，
-    經 ngrok 對外時務必設 token）。
+    otherwise 401; if MUSE_TOKEN is unset, no auth (local testing only,
+    always set a token when exposed via ngrok).
 
-安全線（http_post 專用，也是本檔的硬線）：
-    - 一次只送一個 POST，不循環、不在伺服器裡猜密碼。
-    - 只接受內網 IP 字面，公網 IP 與主機名一律拒絕。
-    - 不跟隨跳轉，302 + Location 本身就是成功信號。
-    - 不回 Cookie 值、不回送出的密碼，只回 Cookie 名稱與欄位名。
+Safety line (http_post only, also this file's hard line):
+    - One POST per call, no loop, no password guessing inside the server.
+    - LAN IP literals only by default; public IPs rejected unless the allow_public switch is on.
+    - No redirect following by default; 302 + Location itself is a success signal.
+    - Never return cookie values or submitted passwords, only cookie names and field names.
 """
 import hashlib
 import http.client
@@ -46,7 +46,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
 ALLOW_PUBLIC = os.environ.get("MUSE_ALLOW_PUBLIC", "") == "1" or os.path.exists(os.path.join(os.path.expanduser("~"), ".lan_mcp_allow_public"))
@@ -84,7 +84,7 @@ def title_of(text):
 
 
 def mask_passwords(text):
-    # 只遮「密碼值」，不遮 JS 函數名：值必須是引號包住、且不含 document/getElement
+    # Mask only password values, not JS function names: value must be quoted and must not contain document/getElement
     def repl(m):
         val = m.group(2)
         if "document" in val or "getElement" in val or "." in val:
@@ -95,7 +95,7 @@ def mask_passwords(text):
 
 
 def tcp_check(host, port, timeout=1.0):
-    """回傳 open / closed / filtered。"""
+    """Return open / closed / filtered."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
@@ -136,7 +136,7 @@ def http_get(host, port, path, timeout=5):
 
 
 def exposed_secrets_from(body):
-    """只認真正的密碼值，JS 函數名不算，避免原版 .1 誤報重演。"""
+    """Only real password values count; JS function names do not, to avoid the original .1 false positive."""
     out = []
     for m in re.finditer(r"(?i)password[^=\n]{0,30}=[\"']([^\"']+)[\"']", body):
         val = m.group(1)
@@ -147,7 +147,7 @@ def exposed_secrets_from(body):
     return out
 
 
-# ---- 工具本體 ----
+# ---- Tool implementations ----
 def network_mode():
     ip = local_ip()
     try:
@@ -213,7 +213,7 @@ def lan_scan(a):
     devices.sort(key=lambda d: ipaddress.ip_address(d["ip"]))
     return {"subnet": str(net), "ports_checked": ports, "count": len(devices),
             "devices": devices,
-            "note": "alive_by：open_port＝有開埠；tcp_rst＝在線但埠全關；arp＝只在 ARP 表看到"}
+            "note": "alive_by: open_port = port open; tcp_rst = live but all ports closed; arp = seen only in ARP table"}
 
 
 def ping(a):
@@ -266,7 +266,7 @@ def web_audit(a):
                                              "value_masked": s["value_masked"]}
                                             for s in exposed_secrets_from(g["body_snippet"])]})
     return {"host": host, "web": web,
-            "note": "exposed_secrets＝未登入即在頁面原始碼看到的密碼樣式（已遮罩）。請自行在瀏覽器核對；這通常是嚴重設定問題。"}
+            "note": "exposed_secrets = password patterns seen in page source without login (masked). Verify in a browser yourself; this is usually a serious misconfiguration."}
 
 
 def audit_host(a):
@@ -288,20 +288,20 @@ def audit_host(a):
                                              "field": s["field"], "len": s["len"],
                                              "value_masked": s["value_masked"]} for s in secs]})
             if secs:
-                flags.append("管理頁面原始碼外洩密碼（見 web.exposed_secrets）")
+                flags.append("Admin page source leaks a password (see web.exposed_secrets)")
         else:
             web.append({"port": p, "server": "", "title": "", "exposed_secrets": []})
     guess = []
     joined = json.dumps(web, ensure_ascii=False)
     if "ZTE" in joined:
-        guess.append("ZTE 路由器/光貓類")
+        guess.append("ZTE router / optical modem family")
     if "Tenda" in joined:
-        guess.append("Tenda 路由器類")
-    if "中国移动" in joined or "中國移動" in joined:
-        guess.append("中國移動設備類")
+        guess.append("Tenda router family")
+    if "\u4e2d\u56fd\u79fb\u52a8" in joined or "\u4e2d\u570b\u79fb\u52d5" in joined:
+        guess.append("China Mobile device family")
     return {"host": host, "open_ports": opens, "banners": banners, "web": web,
             "device_guess": guess, "risk_flags": flags, "default_credential_hints": {},
-            "note": "default_credential_hints 僅供你自行核對，工具不會自動嘗試登入或猜密碼。"}
+            "note": "default_credential_hints are for manual check only; the tool never tries login or password guessing automatically."}
 
 
 def _mqtt_remaining(n):
@@ -374,7 +374,7 @@ def mqtt_probe(a):
         s.close()
         return {"host": host, "port": port, "anonymous_allowed": True,
                 "needs_auth": False, "topics": topics,
-                "note": "只訂閱、不發布；主題只回名稱，不回訊息內容。"}
+                "note": "Subscribe only, never publish; only topic names returned, never message content."}
     except Exception as e:
         return {"host": host, "port": port, "error": str(e)}
 
@@ -401,7 +401,7 @@ def web_cred_context(a):
                             "value_masked": masked, "snippet": snippet,
                             "likely_js_or_template": likely})
     return {"host": host, "port": port, "matches": matches,
-            "note": "snippet 為命中前後文(值已遮罩)。likely_js_or_template=true 代表周圍像程式碼/模板而非真實憑證。僅供人工判讀。"}
+            "note": "snippet is context around the hit (values masked). likely_js_or_template=true means the surroundings look like code/template, not a real credential. For manual judgment only."}
 
 
 def http_probe(a):
@@ -411,7 +411,7 @@ def http_probe(a):
         for path in paths:
             probes.append(http_get(host, int(p), path))
     return {"host": host, "probes": probes,
-            "note": "body_snippet 已移除 script/style 並遮罩疑似密碼；唯讀，不登入。"}
+            "note": "body_snippet has scripts/styles removed and suspected passwords masked; read-only, no login."}
 
 
 def raw_probe(a):
@@ -476,7 +476,7 @@ def ssdp_probe(a):
                     g = http_get(u.hostname, u.port or 80, u.path or "/")
                     if "<" in g["body_snippet"]:
                         root = ET.fromstring(re.sub(r"<\?xml[^?]*\?>", "", g["body_snippet"])[:4000])
-                        # 命名空間不確定，暴力找標籤尾名
+                        # Namespace uncertain, brute-force search by tag local name
                         for el in root.iter():
                             tag = el.tag.split("}")[-1]
                             if tag in item and el.text:
@@ -491,12 +491,12 @@ def ssdp_probe(a):
 
 
 def mdns_probe(a):
-    # 最小實作：發 _services 查詢，收集回包中的可讀服務名；空結果不代表無設備。
+    # Minimal implementation: send a _services query, collect readable service names from replies; empty does not mean no devices.
     name = a.get("name") or "_services._dns-sd._udp.local"
     timeout = float(a.get("timeout", 3))
     host_filter = a.get("host") or ""
     try:
-        # DNS 查詢封包：ID 0, flags 0, QDCOUNT 1
+        # DNS query packet: ID 0, flags 0, QDCOUNT 1
         def enc(n):
             out = b""
             for part in n.split("."):
@@ -645,11 +645,11 @@ def identify_host(a):
     mac_status = "available" if mac else "unavailable_on_this_phone"
     return {"host": host, "hostname": hostname, "mac": mac, "mac_vendor": "",
             "mac_status": mac_status,
-            "mac_note": "手機 ARP 表為空時 MAC 查不到，這是手機沙盒/VPN 問題，不是沒寫代碼。準確的 MAC 在路由器客戶端列表裡，用 router_clients（登入後唯讀）拿。",
+            "mac_note": "When the phone ARP table is empty, MAC cannot be found; this is a phone sandbox/VPN limit, not missing code. Accurate MACs are in the router client list, via router_clients (read-only after login).",
             "open_ports": opens, "http": http_list, "fingerprint_probes": extra_probes,
             "fingerprint_evidence": fp_evidence, "ssdp": ssdp, "mdns": mdns,
             "device_guess": guesses,
-            "note": "綜合裝置自報資訊與多路徑 HTTP 指紋；唯讀。device_guess 只是猜測，需以指紋證據判斷，具體型號要登入後看版本或看機身貼紙。"}
+            "note": "Combined device-reported info and multi-path HTTP fingerprints; read-only. device_guess is only a guess, judge by fingerprint evidence; exact model needs a logged-in version page or device label."}
 
 
 
@@ -657,7 +657,7 @@ def identify_host(a):
 def shell(a):
     """Run a shell command on the phone itself, return output.
 
-    Owner-only, unrestricted by user order 2026-10-27 ("放開做").
+    Owner-only, unrestricted by user order 2026-10-27 ("open mode").
     Runs as the Termux user, not root. Timeout 120s, output capped
     at 20000 chars. This tool is why the Bearer token must never leak:
     anyone with the token gets a shell on the phone, not just a LAN scan.
@@ -665,14 +665,14 @@ def shell(a):
     """
     cmd = a.get("command", "")
     if not cmd:
-        return {"error": "需要 command"}
+        return {"error": "command is required"}
     timeout = float(a.get("timeout", 120))
     try:
         r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
         out = (r.stdout or "") + (r.stderr or "")
         return {"command": cmd, "exit_code": r.returncode, "output": out[:20000]}
     except subprocess.TimeoutExpired:
-        return {"command": cmd, "exit_code": 124, "output": "[TIMEOUT]", "error": f"超過 {timeout}s"}
+        return {"command": cmd, "exit_code": 124, "output": "[TIMEOUT]", "error": f"exceeded {timeout}s"}
     except Exception as e:
         return {"command": cmd, "exit_code": 1, "output": "", "error": str(e)}
 
@@ -688,7 +688,7 @@ def router_clients(a):
     args.setdefault("path", a.get("client_path") or "/goform/GetIpMacBind")
     out = auth_fetch(args)
     out["tool"] = "router_clients"
-    out["note"] = "MAC 來自路由器客戶端列表，不是手機 ARP 表；未登入或路徑不對時，路由器會回登入頁或空數據，那不代表密碼錯，只代表這條路徑不是這台路由器的客戶端列表路徑。"
+    out["note"] = "MAC comes from the router client list, not the phone ARP table; when not logged in or the path is wrong, the router returns a login page or empty data. That does not mean the password is wrong, only that this path is not this router's client-list path."
     return out
 
 def http_post(a):
@@ -697,7 +697,7 @@ def http_post(a):
     use_https = bool(a.get("use_https", False))
     follow = bool(a.get("follow_redirects", False))
     ret_cookies = bool(a.get("return_cookies", False))
-    # 放開點：主機名可以，但解析後必須是內網 IP，否則拒絕。
+    # Open point: hostnames allowed, but must resolve to a LAN IP, otherwise rejected.
     try:
         ip = ipaddress.ip_address(host_in)
         connect_host, resolved = host_in, str(ip)
@@ -707,9 +707,9 @@ def http_post(a):
             ip = ipaddress.ip_address(resolved)
             connect_host = resolved
         except Exception as e:
-            return {"host": host_in, "error": f"主機名解析失敗：{e}"}
+            return {"host": host_in, "error": f"hostname resolution failed: {e}"}
     if not _ip_allowed(ip):
-        return {"host": host_in, "resolved_ip": resolved, "error": "只允許內網 IP，拒絕公網位址（開關未開：設 MUSE_ALLOW_PUBLIC=1 或建 ~/.lan_mcp_allow_public 再重起）"}
+        return {"host": host_in, "resolved_ip": resolved, "error": "Private LAN IP only, public IP rejected (switch off: set MUSE_ALLOW_PUBLIC=1 or create ~/.lan_mcp_allow_public, then restart)"}
     if not path.startswith("/"):
         path = "/" + path
     body = urlencode(form) if form else ""
@@ -734,7 +734,7 @@ def http_post(a):
         if ret_cookies:
             out["set_cookie_values"] = cookies
         conn.close()
-        # 放開點：可選跟隨跳轉，最多 3 次，跳轉目標也要是內網。
+        # Open point: optional redirect following, max 3, redirect targets must also be LAN.
         chain = []
         if follow:
             cur_status, cur_loc, cur_host, cur_port = r.status, r.getheader("Location", ""), connect_host, port
@@ -781,7 +781,7 @@ def _resolve_private(host_in):
             ip = ipaddress.ip_address(resolved)
             return resolved, resolved, ""
         except Exception as e:
-            return "", "", f"主機名解析失敗：{e}"
+            return "", "", f"hostname resolution failed: {e}"
 
 
 def auth_fetch(a):
@@ -793,7 +793,7 @@ def auth_fetch(a):
     if not pwd_md5 and a.get("password"):
         pwd_md5 = hashlib.md5(str(a["password"]).encode()).hexdigest()
     if not pwd_md5:
-        return {"host": host_in, "error": "需要 password 或 password_md5 其中之一"}
+        return {"host": host_in, "error": "password or password_md5 is required"}
     connect_host, resolved, err = _resolve_private(host_in)
     if err:
         return {"host": host_in, "error": err}
@@ -802,7 +802,7 @@ def auth_fetch(a):
     except Exception as e:
         return {"host": host_in, "resolved_ip": resolved, "error": str(e)}
     if not _ip_allowed(ip):
-        return {"host": host_in, "resolved_ip": resolved, "error": "只允許內網 IP，拒絕公網位址（開關未開：設 MUSE_ALLOW_PUBLIC=1 或建 ~/.lan_mcp_allow_public 再重起）"}
+        return {"host": host_in, "resolved_ip": resolved, "error": "Private LAN IP only, public IP rejected (switch off: set MUSE_ALLOW_PUBLIC=1 or create ~/.lan_mcp_allow_public, then restart)"}
     if not path.startswith("/"):
         path = "/" + path
     if not login_path.startswith("/"):
@@ -823,7 +823,7 @@ def auth_fetch(a):
                     "path": path, "login_status": login_status,
                     "login_location": login_location, "cookie_names": cookie_names,
                     "login_body_snippet": login_raw[:500],
-                    "error": "登入未確認：無 Cookie 或回包為 1，未做後續抓取"}
+                    "error": "Login not confirmed: no cookie or response was 1, no follow-up fetch done"}
         cookie_header = "; ".join(v.split(";", 1)[0].strip() for v in cookies)
         headers = {"Cookie": cookie_header, "User-Agent": "muse-lan-mcp/1.2"}
         if connect_host != host_in:
@@ -840,7 +840,7 @@ def auth_fetch(a):
                 "fetch_server": r2.getheader("Server", ""),
                 "title": title_of(raw2),
                 "body_snippet": mask_passwords(strip_script_style(raw2))[:8000],
-                "note": "唯讀 GET，不改設定；Cookie 只在本次呼叫內部用，不回值"}
+                "note": "Read-only GET, no settings changed; cookie used only inside this call, never returned"}
     except Exception as e:
         return {"host": host_in, "port": port, "path": path, "error": str(e)}
 
@@ -860,51 +860,51 @@ def _spec(name, desc, props, required):
 
 
 TOOLS = [
-    _spec("device_info", "這台設備的系統與內網 IP。", {}, []),
-    _spec("lan_scan", "掃描內網網段，找出在線設備（有開埠、回 RST 或在 ARP 表）與其開放埠（預設本機所在 /24）。",
+    _spec("device_info", "This device system and LAN IP.", {}, []),
+    _spec("lan_scan", "Scan a LAN subnet for live hosts (open port, TCP RST, or ARP entry) and their open ports (default: local /24).",
           {"subnet": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}}}, []),
-    _spec("ping", "Ping 一個內網位址。",
+    _spec("ping", "Ping a LAN address.",
           {"host": {"type": "string"}, "count": {"type": "integer"}}, ["host"]),
-    _spec("tcp_ports", "檢查內網設備的 TCP 連接埠（最多 200 個）：open／closed（主機在線）／filtered。",
+    _spec("tcp_ports", "Check TCP ports on a LAN host (max 200): open / closed (host live) / filtered.",
           {"host": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}}}, ["host", "ports"]),
-    _spec("banner", "抓取指定埠的服務 banner（唯讀）。",
+    _spec("banner", "Fetch a service banner from a port (read-only).",
           {"host": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}}}, ["host", "ports"]),
-    _spec("web_audit", "對未驗證 HTTP 頁面唯讀檢查：標題、Server、頁面原始碼中外洩的密碼樣式（遮罩）。不登入、不猜密碼。",
+    _spec("web_audit", "Read-only check of an unauthenticated HTTP page: title, Server, and leaked password patterns in page source (masked). No login, no password guessing.",
           {"host": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}},
            "paths": {"type": "array", "items": {"type": "string"}}}, ["host"]),
-    _spec("audit_host", "單機唯讀安全體檢：廣範圍埠＋banner＋HTTP 標題/Server＋風險旗標＋裝置猜測＋人工核對用預設密碼提示。不登入、不猜密碼。",
+    _spec("audit_host", "Single-host read-only security audit: wide ports + banner + HTTP title/Server + risk flags + device guess + default-credential hints for manual check. No login, no password guessing.",
           {"host": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}}}, ["host"]),
-    _spec("mqtt_probe", "唯讀探測 MQTT broker（如 1883）：用匿名連線測試是否需要認證；若允許匿名則列出看到的主題名稱。不發布、不猜密碼、不送認證。",
+    _spec("mqtt_probe", "Read-only MQTT broker probe (e.g. 1883): test with an anonymous connection whether auth is required; if anonymous is allowed, list seen topic names. No publish, no password guessing, no auth sent.",
           {"host": {"type": "string"}, "port": {"type": "integer"}, "listen": {"type": "number"},
            "max_topics": {"type": "integer"}}, ["host"]),
-    _spec("web_cred_context", "唯讀：對未登入頁面抓疑似密碼欄位的命中前後文（值遮罩），並標記是否像 JS/模板，供人工判讀真假。不登入、不猜密碼。",
+    _spec("web_cred_context", "Read-only: fetch context around suspected password fields on an unauthenticated page (values masked), and mark whether it looks like JS/template, for manual judgment. No login, no password guessing.",
           {"host": {"type": "string"}, "port": {"type": "integer"},
            "paths": {"type": "array", "items": {"type": "string"}}, "context": {"type": "integer"}}, ["host"]),
-    _spec("http_probe", "唯讀：GET 指定埠/路徑，回完整回應標頭、狀態碼、title、去 script 後的 body 片段（密碼遮罩），用來辨識型號。",
+    _spec("http_probe", "Read-only: GET a port/path, return full response headers, status, title, and body snippet with scripts removed (passwords masked), for model identification.",
           {"host": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}},
            "paths": {"type": "array", "items": {"type": "string"}}}, ["host"]),
-    _spec("raw_probe", "唯讀：對非 HTTP 埠送無害探測（空、換行、HTTP、RTSP OPTIONS），回前 160 bytes，辨識協定。",
+    _spec("raw_probe", "Read-only: send harmless probes (empty, newline, HTTP, RTSP OPTIONS) to a non-HTTP port, return first 160 bytes, for protocol identification.",
           {"host": {"type": "string"}, "port": {"type": "integer"}}, ["host", "port"]),
-    _spec("ssdp_probe", "唯讀：UPnP/SSDP 探索，抓裝置自報的 friendlyName/manufacturer/modelName。可指定 host 過濾。",
+    _spec("ssdp_probe", "Read-only: UPnP/SSDP discovery, fetch device-reported friendlyName/manufacturer/modelName. Optional host filter.",
           {"host": {"type": "string"}, "st": {"type": "string"}, "timeout": {"type": "number"}}, []),
-    _spec("mdns_probe", "唯讀：mDNS/Bonjour 查詢，列出區網裝置宣告的服務。可指定 host 過濾、name 查特定服務。",
+    _spec("mdns_probe", "Read-only: mDNS/Bonjour query, list services announced by LAN devices. Optional host filter, name for a specific service.",
           {"host": {"type": "string"}, "name": {"type": "string"}, "timeout": {"type": "number"}}, []),
-    _spec("identify_host", "唯讀綜合辨識：MAC＋HTTP 指紋＋SSDP＋mDNS。不登入、不猜密碼。",
+    _spec("identify_host", "Read-only combined identification: MAC + HTTP fingerprint + SSDP + mDNS. No login, no password guessing.",
           {"host": {"type": "string"}, "ports": {"type": "array", "items": {"type": "integer"}},
            "paths": {"type": "array", "items": {"type": "string"}}, "timeout": {"type": "number"}}, ["host"]),
-    _spec("http_post", "單次 POST 到內網主機（例如路由器登入表單），不循環、不猜密碼；一次只送一組帳密，由呼叫方控制節奏。預設不跟隨跳轉、不回 Cookie 值；follow_redirects=true 可跟隨最多 3 次跳轉，return_cookies=true 才回 Cookie 值，主機名解析到內網 IP 才放行，公網一律拒絕。回傳狀態碼、跳轉位址、Set-Cookie 名稱、標題與去 script 後的 body 片段（密碼遮罩）。",
+    _spec("http_post", "Single POST to a LAN host (e.g. a router login form), no loop, no password guessing; one credential set per call, caller controls pacing. Default: no redirect following, no cookie values returned; follow_redirects=true follows up to 3 redirects, return_cookies=true returns cookie values, hostnames allowed only when resolved to a LAN IP, public IPs always rejected. Returns status, redirect address, Set-Cookie names, title, and body snippet with scripts removed (passwords masked).",
           {"host": {"type": "string"}, "port": {"type": "integer"}, "path": {"type": "string"},
            "form": {"type": "object"}, "use_https": {"type": "boolean"},
            "follow_redirects": {"type": "boolean"}, "return_cookies": {"type": "boolean"}}, ["host", "path"]),
-    _spec("auth_fetch", "登入後在同一次呼叫內用登入 Cookie 做一次唯讀 GET，不改設定。先 POST 登入路徑，再用 Cookie 抓指定路徑；Cookie 只在伺服器內部用，不回值、不存檔。登入用 username 加 password_md5，或 password（伺服器內部轉 MD5）。只接內網，公網一律拒絕。回傳登入狀態、Cookie 名稱、抓取狀態、標題與去 script 後的 body 片段（密碼遮罩）。",
+    _spec("auth_fetch", "After login, one read-only GET with the login cookie in the same call, no settings changed. POST the login path first, then fetch the target path with the cookie; the cookie is used only inside the server, never returned, never stored. Login uses username plus password_md5, or password (converted to MD5 inside the server). LAN only, public IPs always rejected. Returns login status, cookie names, fetch status, title, and body snippet with scripts removed (passwords masked).",
           {"host": {"type": "string"}, "port": {"type": "integer"}, "path": {"type": "string"},
            "login_path": {"type": "string"}, "username": {"type": "string"},
            "password": {"type": "string"}, "password_md5": {"type": "string"}}, ["host", "path"]),
-    _spec("router_clients", "登入路由器後唯讀抓客戶端列表（IP+MAC+設備名），這是 MAC 的準確來源。登入方式與 auth_fetch 相同，一次登入、一次唯讀 GET、不改設定、Cookie 不回值。client_path 預設 /goform/GetIpMacBind，不同品牌路徑不同，路徑不對時回登入頁或空數據。",
+    _spec("router_clients", "After router login, read-only fetch of the client list (IP+MAC+hostname), the accurate MAC source. Login works like auth_fetch: one login, one read-only GET, no settings changed, cookie values never returned. client_path defaults to /goform/GetIpMacBind; paths differ by brand, a wrong path returns a login page or empty data.",
           {"host": {"type": "string"}, "port": {"type": "integer"}, "path": {"type": "string"},
            "client_path": {"type": "string"}, "login_path": {"type": "string"}, "username": {"type": "string"},
            "password": {"type": "string"}, "password_md5": {"type": "string"}}, ["host"]),
-    _spec("shell", "在手機本機跑一條 shell 命令，回輸出與退出碼。用戶 2026-10-27 親定放開做，僅限機主本人經 Bearer token 使用；token 外洩等於手機 shell 外洩，用完務必關隧道。超時 120 秒，輸出截 20000 字。",
+    _spec("shell", "Run one shell command on the phone itself, return output and exit code. Owner-only via Bearer token; a leaked token equals a leaked phone shell, so close the tunnel when done. Timeout 120s, output truncated to 20000 chars.",
           {"command": {"type": "string"}, "timeout": {"type": "number"}}, ["command"]),
 ]
 
@@ -964,7 +964,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     srv = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Muse LAN MCP v{VERSION} listening on 0.0.0.0:{PORT} /mcp, tools={len(TOOLS)}, allow_public={ALLOW_PUBLIC}", flush=True)
+    print(f"SentinelMind v{VERSION} listening on 0.0.0.0:{PORT} /mcp, tools={len(TOOLS)}, allow_public={ALLOW_PUBLIC}", flush=True)
     if ALLOW_PUBLIC:
         print("WARNING: allow_public is ON - public IP targets are allowed, close the tunnel when done.", flush=True)
     try:
