@@ -168,6 +168,12 @@ Note: SentinelMind has two modes. Do not confuse them.
 
 In short: Safe Audit Mode for routine audits, Full-Access Mode only when full control is needed.
 
+### Which AI Can Use Which Mode
+
+- **Safe Audit Mode (normal mode): any AI assistant that supports remote MCP.** No local computer is needed on the AI side. The AI only needs to add a remote MCP server, with the tunnel URL plus `/mcp` and the Bearer token. Examples: Claude Desktop, Cursor, VS Code Copilot, and other MCP-compatible assistants that support remote HTTP MCP servers. If an AI app only has a chat box and no place to add an MCP server, it cannot use this mode.
+- **Full-Access Mode: only AI assistants with code execution and shell control.** Examples: Muse, Claude Code, Cursor agent mode, Codex-style coding agents, and other agents that can run commands in their own environment. A chat-only AI cannot use Full-Access Mode usefully, even if it can connect, because it has no way to drive Termux commands itself.
+- **What does not work:** an AI that supports only local stdio MCP (not remote HTTP) cannot connect directly with a tunnel URL, and an AI with no MCP support at all cannot use either mode through this server.
+
 ## Usage Examples
 
 Audit in this order, and record the evidence for each step instead of guessing an identity from one signal:
