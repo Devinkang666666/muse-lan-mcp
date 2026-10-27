@@ -46,7 +46,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.7.2"
+VERSION = "1.7.3"
 PORT = int(os.environ.get("PORT", "8765"))
 TOKEN = os.environ.get("MUSE_TOKEN", "")
 ALLOW_PUBLIC = os.environ.get("MUSE_ALLOW_PUBLIC", "") == "1" or os.path.exists(os.path.join(os.path.expanduser("~"), ".lan_mcp_allow_public"))
@@ -148,8 +148,45 @@ def exposed_secrets_from(body):
 
 
 # ---- Tool implementations ----
+def wifi_status():
+    """Best-effort WiFi state via Termux:API, if installed. Returns (state, ssid).
+    state is 'connected', 'disconnected', or 'unknown' (no Termux:API / command failed).
+    A private IP alone is NOT proof of a home LAN: mobile carrier NAT also uses
+    private 10.x addresses, so WiFi state must decide, not the IP alone."""
+    try:
+        out = subprocess.run(["termux-wifi-connectioninfo"], capture_output=True,
+                             text=True, timeout=3)
+        if out.returncode != 0 or not out.stdout.strip():
+            return "unknown", ""
+        info = json.loads(out.stdout)
+        ssid = info.get("ssid", "") or ""
+        state = (info.get("supplicant_state", "") or "").upper()
+        ip = info.get("ip", "") or ""
+        if state in ("COMPLETED", "CONNECTED") and ssid and ssid != "<unknown ssid>" and ip not in ("", "0.0.0.0"):
+            return "connected", ssid
+        if state in ("DISCONNECTED", "INACTIVE", "SCANNING", "AUTHENTICATING", "ASSOCIATING"):
+            return "disconnected", ssid
+        return "unknown", ssid
+    except Exception:
+        return "unknown", ""
+
+
 def network_mode():
     ip = local_ip()
+    wifi_state, _ssid = wifi_status()
+    # WiFi disconnected => mobile / non-LAN, even if the IP is private (carrier NAT).
+    if wifi_state == "disconnected":
+        return "non_lan"
+    # WiFi connected + private IP => home LAN.
+    if wifi_state == "connected":
+        try:
+            addr = ipaddress.ip_address(ip)
+            if addr.is_private or addr.is_loopback:
+                return "lan"
+        except Exception:
+            pass
+        return "non_lan"
+    # No WiFi info (no Termux:API): fall back to the old private-IP rule.
     try:
         addr = ipaddress.ip_address(ip)
         if addr.is_private or addr.is_loopback:
@@ -161,9 +198,11 @@ def network_mode():
 
 def device_info(_a):
     import platform
+    wifi_state, wifi_ssid = wifi_status()
     return {"os": f"{platform.system()}-{platform.release()}-{platform.machine()}",
             "hostname": socket.gethostname(), "local_ip": local_ip(),
             "network_mode": network_mode(),
+            "wifi_state": wifi_state, "wifi_ssid": wifi_ssid,
             "allow_public": ALLOW_PUBLIC,
             "python": sys.version.split()[0], "muse_lan_mcp_version": VERSION}
 
